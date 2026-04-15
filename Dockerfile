@@ -20,6 +20,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/prisma.config.ts ./prisma.config.ts
 RUN npx prisma generate
 
 COPY --from=builder /usr/src/app/dist ./dist
