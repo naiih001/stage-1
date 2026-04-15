@@ -2,7 +2,7 @@
 
 set -u
 
-BASE_URL="${1:-https://stage-1-production-cfec.up.railway.app}"
+BASE_URL="${1:-https://stage-1-production-11c5.up.railway.app}"
 BASE_URL="${BASE_URL%/}"
 API_BASE="$BASE_URL/api/profiles"
 TEST_NAME="${TEST_NAME:-Ada}"
