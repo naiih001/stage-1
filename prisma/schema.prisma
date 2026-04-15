@@ -1,0 +1,22 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+model Profile {
+    id                 String   @id @default(uuid())
+    name               String   @unique
+    gender             String?
+    genderProbability  Float?
+    sampleSize         Int?
+    age                Int?
+    ageGroup           String?
+    countryId          String?
+    countryProbability Float?
+    createdAt          DateTime @default(now())
+
+    @@map("profiles")
+}
