@@ -3,6 +3,7 @@ import {
   BadRequestException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service';
 import { HttpService } from '@nestjs/axios';
@@ -20,6 +21,8 @@ interface ApiResponse {
 
 @Injectable()
 export class ProfilesService {
+  private readonly logger = new Logger(ProfilesService.name);
+
   constructor(
     private prisma: PrismaService,
     private httpService: HttpService,
@@ -30,6 +33,7 @@ export class ProfilesService {
       const response = await firstValueFrom(this.httpService.get(url));
       return response.data;
     } catch {
+      this.logger.error(`External API request failed: ${url}`);
       throw new HttpException('External API failed', HttpStatus.BAD_GATEWAY);
     }
   }
@@ -41,6 +45,7 @@ export class ProfilesService {
     }
 
     const lowerName = name.toLowerCase().trim();
+    this.logger.log(`Create profile requested for name=${lowerName}`);
 
     // Check idempotency
     const existing = await this.prisma.profile.findUnique({
@@ -48,6 +53,7 @@ export class ProfilesService {
     });
 
     if (existing) {
+      this.logger.log(`Returning existing profile id=${existing.id}`);
       return {
         status: 'success',
         message: 'Profile already exists',
@@ -102,6 +108,8 @@ export class ProfilesService {
       },
     });
 
+    this.logger.log(`Created profile id=${profile.id} name=${profile.name}`);
+
     return {
       status: 'success',
       data: this.formatProfile(profile),
@@ -109,6 +117,7 @@ export class ProfilesService {
   }
 
   async findOne(id: string) {
+    this.logger.log(`Fetching profile id=${id}`);
     const profile = await this.prisma.profile.findUnique({ where: { id } });
     if (!profile)
       throw new HttpException('Profile not found', HttpStatus.NOT_FOUND);
@@ -120,6 +129,7 @@ export class ProfilesService {
     country_id?: string;
     age_group?: string;
   }) {
+    this.logger.log(`Listing profiles with filters=${JSON.stringify(filters)}`);
     const where: any = {};
 
     if (filters.gender) where.gender = filters.gender.toLowerCase();
@@ -146,9 +156,11 @@ export class ProfilesService {
   }
 
   async remove(id: string) {
+    this.logger.log(`Deleting profile id=${id}`);
     await this.prisma.profile.delete({ where: { id } }).catch(() => {
       throw new HttpException('Profile not found', HttpStatus.NOT_FOUND);
     });
+    this.logger.log(`Deleted profile id=${id}`);
     return; // 204 No Content
   }
 
