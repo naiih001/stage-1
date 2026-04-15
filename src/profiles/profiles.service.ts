@@ -12,8 +12,7 @@ import { CreateProfileDto } from './dto/create-profile.dto';
 
 interface ApiResponse {
   gender?: string;
-  gender_probability?: number;
-
+  probability?: number;
   count?: number;
   age?: number;
   country?: Array<{ country_id: string; probability: number }>;
@@ -30,7 +29,7 @@ export class ProfilesService {
     try {
       const response = await firstValueFrom(this.httpService.get(url));
       return response.data;
-    } catch (error) {
+    } catch {
       throw new HttpException('External API failed', HttpStatus.BAD_GATEWAY);
     }
   }
@@ -94,7 +93,7 @@ export class ProfilesService {
         id: uuidv7(),
         name: lowerName,
         gender: genderData.gender,
-        genderProbability: genderData.gender_probability,
+        genderProbability: genderData.probability,
         sampleSize: genderData.count,
         age: ageData.age,
         ageGroup,
@@ -142,7 +141,7 @@ export class ProfilesService {
     return {
       status: 'success',
       count: profiles.length,
-      data: profiles,
+      data: profiles.map((profile) => this.formatListProfile(profile)),
     };
   }
 
@@ -166,6 +165,17 @@ export class ProfilesService {
       country_id: profile.countryId,
       country_probability: profile.countryProbability,
       created_at: profile.createdAt.toISOString(),
+    };
+  }
+
+  private formatListProfile(profile: any) {
+    return {
+      id: profile.id,
+      name: profile.name,
+      gender: profile.gender,
+      age: profile.age,
+      age_group: profile.ageGroup,
+      country_id: profile.countryId,
     };
   }
 }
