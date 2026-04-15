@@ -1,98 +1,283 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Profile Intelligence Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS backend service for HNG Stage 1. It accepts a person's name, enriches it with demographic estimates from external APIs, stores the result in PostgreSQL, and exposes endpoints to create, fetch, filter, and delete profiles.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- NestJS
+- Prisma ORM
+- PostgreSQL
+- Docker and Docker Compose
+- External enrichment APIs:
+  - `https://api.genderize.io`
+  - `https://api.agify.io`
+  - `https://api.nationalize.io`
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Features
 
-## Project setup
+- Creates a profile from a single `name` input
+- Uses idempotent create behavior for duplicate names
+- Stores enriched profile data in PostgreSQL
+- Supports filtering by `gender`, `country_id`, and `age_group`
+- Returns UUID v7 profile IDs
+- Runs with Docker for local or hosted deployment
 
-```bash
-$ npm install
+## Base URL
+
+Local development:
+
+```text
+http://127.0.0.1:3000
 ```
 
-## Compile and run the project
+All API routes are prefixed with:
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```text
+/api
 ```
 
-## Run tests
+Example:
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```text
+http://127.0.0.1:3000/api/profiles
 ```
 
-## Deployment
+## Environment Variables
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+The app reads these values at runtime:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```env
+DATABASE_URL=postgresql://postgres:password@localhost:5432/profile_db?schema=public
+PORT=3000
+HOST=127.0.0.1
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Run Locally
 
-## Resources
+### 1. Install dependencies
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+npm install
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### 2. Start PostgreSQL
 
-## Support
+Using Docker Compose:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+docker compose up -d postgres
+```
 
-## Stay in touch
+### 3. Set environment variables
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Create a `.env` file in the project root:
 
-## License
+```env
+DATABASE_URL=postgresql://postgres:password@localhost:5432/profile_db?schema=public
+PORT=3000
+HOST=127.0.0.1
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+### 4. Generate Prisma client and apply migrations
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+### 5. Start the server
+
+```bash
+npm run start:dev
+```
+
+## Run With Docker
+
+Start the full application stack:
+
+```bash
+docker compose up --build
+```
+
+The API will be available at:
+
+```text
+http://127.0.0.1:3000/api
+```
+
+## Available Scripts
+
+```bash
+npm run start:dev
+npm run build
+npm run start:prod
+npm run test
+npm run test:e2e
+npm run test:cov
+npm run lint
+```
+
+## API Endpoints
+
+### `POST /api/profiles`
+
+Create or return an existing profile for a given name.
+
+Request:
+
+```json
+{
+  "name": "Ada"
+}
+```
+
+Successful response:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "01963c90-0c23-7f3d-bdf8-3d9f9a2cc999",
+    "name": "ada",
+    "gender": "female",
+    "gender_probability": 0.99,
+    "sample_size": 12345,
+    "age": 31,
+    "age_group": "adult",
+    "country_id": "NG",
+    "country_probability": 0.42,
+    "created_at": "2026-04-15T14:11:53.000Z"
+  }
+}
+```
+
+If the profile already exists, the service returns the saved record instead of creating a duplicate:
+
+```json
+{
+  "status": "success",
+  "message": "Profile already exists",
+  "data": {
+    "id": "01963c90-0c23-7f3d-bdf8-3d9f9a2cc999",
+    "name": "ada",
+    "gender": "female",
+    "gender_probability": 0.99,
+    "sample_size": 12345,
+    "age": 31,
+    "age_group": "adult",
+    "country_id": "NG",
+    "country_probability": 0.42,
+    "created_at": "2026-04-15T14:11:53.000Z"
+  }
+}
+```
+
+### `GET /api/profiles/:id`
+
+Fetch a single stored profile by ID.
+
+Response:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "01963c90-0c23-7f3d-bdf8-3d9f9a2cc999",
+    "name": "ada",
+    "gender": "female",
+    "gender_probability": 0.99,
+    "sample_size": 12345,
+    "age": 31,
+    "age_group": "adult",
+    "country_id": "NG",
+    "country_probability": 0.42,
+    "created_at": "2026-04-15T14:11:53.000Z"
+  }
+}
+```
+
+### `GET /api/profiles`
+
+List profiles, optionally filtered by query parameters.
+
+Supported filters:
+
+- `gender`
+- `country_id`
+- `age_group`
+
+Example:
+
+```text
+GET /api/profiles?gender=female&country_id=NG&age_group=adult
+```
+
+Response:
+
+```json
+{
+  "status": "success",
+  "count": 1,
+  "data": [
+    {
+      "id": "01963c90-0c23-7f3d-bdf8-3d9f9a2cc999",
+      "name": "ada",
+      "gender": "female",
+      "age": 31,
+      "ageGroup": "adult",
+      "countryId": "NG"
+    }
+  ]
+}
+```
+
+### `DELETE /api/profiles/:id`
+
+Delete a profile by ID.
+
+Response:
+
+```text
+204 No Content
+```
+
+## Validation and Behavior Notes
+
+- `name` is required and must be a non-empty string
+- Names are trimmed and stored in lowercase
+- Age groups are derived as:
+  - `child`: `0-12`
+  - `teenager`: `13-19`
+  - `adult`: `20-59`
+  - `senior`: `60+`
+- The selected country is the highest-probability result from Nationalize
+- If an upstream enrichment API fails or returns invalid data, the service returns `502`
+
+## Database Model
+
+Stored profile fields:
+
+- `id`
+- `name`
+- `gender`
+- `genderProbability`
+- `sampleSize`
+- `age`
+- `ageGroup`
+- `countryId`
+- `countryProbability`
+- `createdAt`
+
+## Health Check
+
+The root route is available at:
+
+```text
+GET /
+```
+
+It currently returns:
+
+```text
+Hello World!
+```
