@@ -1,0 +1,68 @@
+export const COUNTRY_ALIASES: Record<string, string> = {
+  algeria: 'DZ',
+  angola: 'AO',
+  benin: 'BJ',
+  botswana: 'BW',
+  burkinafaso: 'BF',
+  burundi: 'BI',
+  cameroon: 'CM',
+  capeverde: 'CV',
+  centralafricanrepublic: 'CF',
+  chad: 'TD',
+  comoros: 'KM',
+  congo: 'CG',
+  drc: 'CD',
+  drcongo: 'CD',
+  democraticrepublicofthecongo: 'CD',
+  democraticrepublicofcongo: 'CD',
+  ivorycoast: 'CI',
+  cotedivoire: 'CI',
+  djibouti: 'DJ',
+  egypt: 'EG',
+  equatorialguinea: 'GQ',
+  eritrea: 'ER',
+  eswatini: 'SZ',
+  ethiopia: 'ET',
+  gabon: 'GA',
+  gambia: 'GM',
+  ghana: 'GH',
+  guinea: 'GN',
+  guineabissau: 'GW',
+  kenya: 'KE',
+  lesotho: 'LS',
+  liberia: 'LR',
+  libya: 'LY',
+  madagascar: 'MG',
+  malawi: 'MW',
+  mali: 'ML',
+  mauritania: 'MR',
+  mauritius: 'MU',
+  morocco: 'MA',
+  mozambique: 'MZ',
+  namibia: 'NA',
+  niger: 'NE',
+  nigeria: 'NG',
+  rwanda: 'RW',
+  senegal: 'SN',
+  sierraleone: 'SL',
+  somalia: 'SO',
+  southafrica: 'ZA',
+  southsudan: 'SS',
+  sudan: 'SD',
+  tanzania: 'TZ',
+  togo: 'TG',
+  tunisia: 'TN',
+  uganda: 'UG',
+  zambia: 'ZM',
+  zimbabwe: 'ZW',
+};
+
+export function lookupCountryCode(input: string): string | null {
+  const normalized = input.toLowerCase().replace(/[^a-z]/g, '');
+  return COUNTRY_ALIASES[normalized] ?? null;
+}
+
+export function getCountryName(countryId: string): string {
+  const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  return regionNames.of(countryId.toUpperCase()) ?? countryId.toUpperCase();
+}

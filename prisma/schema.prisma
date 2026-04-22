@@ -1,22 +1,28 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
+  provider = "postgresql"
 }
 
 model Profile {
-    id                 String   @id @default(uuid())
-    name               String   @unique
-    gender             String?
-    genderProbability  Float?
-    sampleSize         Int?
-    age                Int?
-    ageGroup           String?
-    countryId          String?
-    countryProbability Float?
-    createdAt          DateTime @default(now())
+  id                 String   @id @db.Uuid
+  name               String   @unique @db.VarChar
+  gender             String   @db.VarChar
+  genderProbability  Float    @map("gender_probability")
+  age                Int
+  ageGroup           String   @map("age_group") @db.VarChar
+  countryId          String   @map("country_id") @db.VarChar(2)
+  countryName        String   @map("country_name") @db.VarChar
+  countryProbability Float    @map("country_probability")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-    @@map("profiles")
+  @@index([gender])
+  @@index([ageGroup])
+  @@index([countryId])
+  @@index([age])
+  @@index([createdAt])
+  @@index([gender, countryId, age])
+  @@map("profiles")
 }

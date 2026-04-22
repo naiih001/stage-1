@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Ada Nwosu",
+    "gender": "female",
+    "gender_probability": 0.99,
+    "age": 31,
+    "age_group": "adult",
+    "country_id": "NG",
+    "country_name": "Nigeria",
+    "country_probability": 0.84
+  },
+  {
+    "name": "James Mwangi",
+    "gender": "male",
+    "gender_probability": 0.98,
+    "age": 28,
+    "age_group": "adult",
+    "country_id": "KE",
+    "country_name": "Kenya",
+    "country_probability": 0.81
+  },
+  {
+    "name": "Sofia Mensah",
+    "gender": "female",
+    "gender_probability": 0.97,
+    "age": 17,
+    "age_group": "teenager",
+    "country_id": "GH",
+    "country_name": "Ghana",
+    "country_probability": 0.78
+  },
+  {
+    "name": "Daniel Mbeki",
+    "gender": "male",
+    "gender_probability": 0.96,
+    "age": 64,
+    "age_group": "senior",
+    "country_id": "ZA",
+    "country_name": "South Africa",
+    "country_probability": 0.75
+  }
+]

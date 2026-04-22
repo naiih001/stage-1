@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 
 set -u
+set -o pipefail
 
-BASE_URL="${1:-https://stage-1-production-11c5.up.railway.app}"
+BASE_URL="${1:-http://localhost:3000}"
 BASE_URL="${BASE_URL%/}"
 API_BASE="$BASE_URL/api/profiles"
 TEST_NAME="${TEST_NAME:-Ada}"
 
 FAILURES=0
+RESPONSE_CODE=""
+RESPONSE_BODY=""
 CREATED_ID=""
 CREATED_GENDER=""
 CREATED_COUNTRY_ID=""
+CREATED_COUNTRY_NAME=""
+CREATED_AGE=""
 CREATED_AGE_GROUP=""
+FIRST_CREATED_ID=""
 
 print_section() {
   local title="$1"
@@ -42,12 +48,12 @@ run_request() {
       -d "$body" \
       -o "$tmp_body" \
       -w '%{http_code}' \
-      "$url" 2>&1)"
+      "$url")"
   else
     http_code="$(curl -sS -X "$method" \
       -o "$tmp_body" \
       -w '%{http_code}' \
-      "$url" 2>&1)"
+      "$url")"
   fi
 
   local curl_exit=$?
@@ -58,32 +64,37 @@ run_request() {
     return 1
   fi
 
-  printf 'HTTP %s\n' "$http_code"
-  cat "$tmp_body"
-  printf '\n'
-
   RESPONSE_CODE="$http_code"
   RESPONSE_BODY="$(cat "$tmp_body")"
+
+  printf 'HTTP %s\n' "$RESPONSE_CODE"
+  if [[ -n "$RESPONSE_BODY" ]]; then
+    printf '%s\n' "$RESPONSE_BODY"
+  else
+    printf '<empty body>\n'
+  fi
+
   rm -f "$tmp_body"
   return 0
 }
 
 extract_json_field() {
   local field="$1"
-  printf '%s' "$RESPONSE_BODY" | node -e "
-    let input = '';
-    process.stdin.on('data', chunk => input += chunk);
-    process.stdin.on('end', () => {
+  printf '%s' "$RESPONSE_BODY" | env FIELD_PATH="$field" node -e '
+    const field = process.env.FIELD_PATH;
+    let input = "";
+    process.stdin.on("data", (chunk) => input += chunk);
+    process.stdin.on("end", () => {
       try {
         const data = JSON.parse(input);
-        const value = '$field'.split('.').reduce((acc, key) => acc == null ? undefined : acc[key], data);
+        const value = field.split(".").reduce((acc, key) => acc == null ? undefined : acc[key], data);
         if (value == null) process.exit(1);
         process.stdout.write(String(value));
       } catch {
         process.exit(1);
       }
     });
-  " 2>/dev/null
+  ' 2>/dev/null
 }
 
 assert_status() {
@@ -97,43 +108,127 @@ assert_status() {
   return 0
 }
 
-run_request "List profiles" GET "$API_BASE"
-assert_status 200 "List profiles"
+assert_json_field_equals() {
+  local field="$1"
+  local expected="$2"
+  local label="$3"
+  local actual
+  actual="$(extract_json_field "$field" || true)"
+  if [[ "$actual" != "$expected" ]]; then
+    record_failure "$label expected $field=$expected, got ${actual:-<missing>}"
+    return 1
+  fi
+  printf 'PASS: %s=%s\n' "$field" "$expected"
+  return 0
+}
+
+assert_json_field_present() {
+  local field="$1"
+  local label="$2"
+  local actual
+  actual="$(extract_json_field "$field" || true)"
+  if [[ -z "$actual" ]]; then
+    record_failure "$label missing $field"
+    return 1
+  fi
+  printf 'PASS: %s present\n' "$field"
+  return 0
+}
+
+assert_response_contains_id() {
+  local expected_id="$1"
+  local label="$2"
+  printf '%s' "$RESPONSE_BODY" | env EXPECTED_ID="$expected_id" node -e '
+    let input = "";
+    process.stdin.on("data", (chunk) => input += chunk);
+    process.stdin.on("end", () => {
+      try {
+        const payload = JSON.parse(input);
+        const rows = Array.isArray(payload.data) ? payload.data : [];
+        const found = rows.some((row) => row && String(row.id) === process.env.EXPECTED_ID);
+        process.exit(found ? 0 : 1);
+      } catch {
+        process.exit(1);
+      }
+    });
+  ' 2>/dev/null
+
+  if [[ $? -ne 0 ]]; then
+    record_failure "$label did not include id=$expected_id"
+    return 1
+  fi
+
+  printf 'PASS: response includes id=%s\n' "$expected_id"
+  return 0
+}
+
+run_request "List profiles default query" GET "$API_BASE"
+assert_status 200 "List profiles default query"
+assert_json_field_equals "status" "success" "List profiles default query"
+assert_json_field_equals "page" "1" "List profiles default query"
+assert_json_field_equals "limit" "10" "List profiles default query"
+assert_json_field_present "total" "List profiles default query"
 
 run_request "Create profile" POST "$API_BASE" "{\"name\":\"$TEST_NAME\"}"
 assert_status 201 "Create profile"
+assert_json_field_equals "status" "success" "Create profile"
+assert_json_field_present "data.id" "Create profile"
+assert_json_field_equals "data.name" "$TEST_NAME" "Create profile"
 
 CREATED_ID="$(extract_json_field 'data.id' || true)"
 CREATED_GENDER="$(extract_json_field 'data.gender' || true)"
 CREATED_COUNTRY_ID="$(extract_json_field 'data.country_id' || true)"
+CREATED_COUNTRY_NAME="$(extract_json_field 'data.country_name' || true)"
+CREATED_AGE="$(extract_json_field 'data.age' || true)"
 CREATED_AGE_GROUP="$(extract_json_field 'data.age_group' || true)"
+FIRST_CREATED_ID="$CREATED_ID"
 
-if [[ -z "$CREATED_ID" ]]; then
-  record_failure "Create profile did not return data.id"
-else
-  printf 'Captured id=%s gender=%s country_id=%s age_group=%s\n' \
-    "$CREATED_ID" "${CREATED_GENDER:-unknown}" "${CREATED_COUNTRY_ID:-unknown}" "${CREATED_AGE_GROUP:-unknown}"
-fi
+printf 'Captured id=%s gender=%s country_id=%s country_name=%s age=%s age_group=%s\n' \
+  "${CREATED_ID:-unknown}" "${CREATED_GENDER:-unknown}" "${CREATED_COUNTRY_ID:-unknown}" \
+  "${CREATED_COUNTRY_NAME:-unknown}" "${CREATED_AGE:-unknown}" "${CREATED_AGE_GROUP:-unknown}"
+
+run_request "Create same profile again" POST "$API_BASE" "{\"name\":\"$TEST_NAME\"}"
+assert_status 201 "Create same profile again"
+assert_json_field_equals "status" "success" "Create same profile again"
+assert_json_field_equals "message" "Profile already exists" "Create same profile again"
+assert_json_field_equals "data.id" "$FIRST_CREATED_ID" "Create same profile again"
 
 if [[ -n "$CREATED_ID" ]]; then
   run_request "Fetch created profile" GET "$API_BASE/$CREATED_ID"
   assert_status 200 "Fetch created profile"
+  assert_json_field_equals "status" "success" "Fetch created profile"
+  assert_json_field_equals "data.id" "$CREATED_ID" "Fetch created profile"
 fi
 
-if [[ -n "$CREATED_GENDER" ]]; then
-  run_request "Filter by gender" GET "$API_BASE?gender=$CREATED_GENDER"
-  assert_status 200 "Filter by gender"
+if [[ -n "$CREATED_GENDER" && -n "$CREATED_COUNTRY_ID" && -n "$CREATED_AGE_GROUP" && -n "$CREATED_AGE" ]]; then
+  run_request "Combined filters" GET "$API_BASE?gender=$CREATED_GENDER&age_group=$CREATED_AGE_GROUP&country_id=$CREATED_COUNTRY_ID&min_age=$CREATED_AGE&max_age=$CREATED_AGE"
+  assert_status 200 "Combined filters"
+  assert_json_field_equals "status" "success" "Combined filters"
+  assert_response_contains_id "$CREATED_ID" "Combined filters"
 fi
 
-if [[ -n "$CREATED_COUNTRY_ID" ]]; then
-  run_request "Filter by country_id" GET "$API_BASE?country_id=$CREATED_COUNTRY_ID"
-  assert_status 200 "Filter by country_id"
+run_request "Pagination and sorting" GET "$API_BASE?sort_by=age&order=desc&page=1&limit=1"
+assert_status 200 "Pagination and sorting"
+assert_json_field_equals "status" "success" "Pagination and sorting"
+assert_json_field_equals "page" "1" "Pagination and sorting"
+assert_json_field_equals "limit" "1" "Pagination and sorting"
+
+if [[ -n "$CREATED_GENDER" && -n "$CREATED_COUNTRY_ID" ]]; then
+  run_request "Natural-language search" GET "$API_BASE/search?q=${CREATED_GENDER}s%20from%20$CREATED_COUNTRY_ID&page=1&limit=10"
+  assert_status 200 "Natural-language search"
+  assert_json_field_equals "status" "success" "Natural-language search"
+  assert_response_contains_id "$CREATED_ID" "Natural-language search"
 fi
 
-if [[ -n "$CREATED_AGE_GROUP" ]]; then
-  run_request "Filter by age_group" GET "$API_BASE?age_group=$CREATED_AGE_GROUP"
-  assert_status 200 "Filter by age_group"
-fi
+run_request "Invalid filter validation" GET "$API_BASE?gender=robot"
+assert_status 422 "Invalid filter validation"
+assert_json_field_equals "status" "error" "Invalid filter validation"
+assert_json_field_equals "message" "Invalid query parameters" "Invalid filter validation"
+
+run_request "Uninterpretable search validation" GET "$API_BASE/search?q=show%20me%20something%20useful"
+assert_status 400 "Uninterpretable search validation"
+assert_json_field_equals "status" "error" "Uninterpretable search validation"
+assert_json_field_equals "message" "Unable to interpret query" "Uninterpretable search validation"
 
 if [[ -n "$CREATED_ID" ]]; then
   run_request "Delete created profile" DELETE "$API_BASE/$CREATED_ID"
@@ -141,11 +236,13 @@ if [[ -n "$CREATED_ID" ]]; then
 
   run_request "Fetch deleted profile" GET "$API_BASE/$CREATED_ID"
   assert_status 404 "Fetch deleted profile"
+  assert_json_field_equals "status" "error" "Fetch deleted profile"
+  assert_json_field_equals "message" "Profile not found" "Fetch deleted profile"
 fi
 
 print_section "Summary"
 if [[ $FAILURES -eq 0 ]]; then
-  printf 'All production route checks completed successfully against %s\n' "$BASE_URL"
+  printf 'All Stage 2 production checks completed successfully against %s\n' "$BASE_URL"
   exit 0
 fi
 

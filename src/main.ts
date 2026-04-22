@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import {
   BadRequestException,
-  HttpStatus,
   Logger,
   UnprocessableEntityException,
   ValidationPipe,
@@ -61,4 +60,4 @@ async function bootstrap() {
   await app.listen(port, host);
   logger.log(`Application listening on http://${host}:${port}/api`);
 }
-bootstrap();
+void bootstrap();

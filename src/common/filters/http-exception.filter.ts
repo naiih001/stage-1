@@ -57,9 +57,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       typeof exceptionResponse === 'object' &&
       'message' in exceptionResponse
     ) {
-      const message = exceptionResponse.message;
+      const { message } = exceptionResponse as { message?: unknown };
       if (Array.isArray(message)) {
-        return message[0] ?? fallbackMessage;
+        const messages = message as unknown[];
+        const firstMessage = messages[0];
+        return typeof firstMessage === 'string'
+          ? firstMessage
+          : fallbackMessage;
       }
       if (typeof message === 'string') {
         return message;

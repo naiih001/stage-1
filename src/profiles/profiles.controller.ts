@@ -21,18 +21,47 @@ export class ProfilesController {
     return this.profilesService.create(createProfileDto);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.profilesService.findOne(id);
+  @Get('search')
+  async search(
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.profilesService.search({ q, page, limit });
   }
 
   @Get()
   async findAll(
     @Query('gender') gender?: string,
-    @Query('country_id') country_id?: string,
     @Query('age_group') age_group?: string,
+    @Query('country_id') country_id?: string,
+    @Query('min_age') min_age?: string,
+    @Query('max_age') max_age?: string,
+    @Query('min_gender_probability') min_gender_probability?: string,
+    @Query('min_country_probability') min_country_probability?: string,
+    @Query('sort_by') sort_by?: string,
+    @Query('order') order?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.profilesService.findAll({ gender, country_id, age_group });
+    return this.profilesService.findAll({
+      gender,
+      age_group,
+      country_id,
+      min_age,
+      max_age,
+      min_gender_probability,
+      min_country_probability,
+      sort_by,
+      order,
+      page,
+      limit,
+    });
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.profilesService.findOne(id);
   }
 
   @Delete(':id')

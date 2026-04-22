@@ -5,50 +5,67 @@ import { ProfilesService } from './profiles.service';
 
 describe('ProfilesController', () => {
   let controller: ProfilesController;
-  let service: ProfilesService;
+  const createMock = jest.fn();
+  const findOneMock = jest.fn();
+  const findAllMock = jest.fn();
+  const searchMock = jest.fn();
+  const removeMock = jest.fn();
 
   const mockProfile = {
-    id: 'b3f9c1e2-7d4a-4c91-9c2a-1f0a8e5b6d12',
+    id: '01964d85-6c50-7d11-a6e9-2081ea0f1234',
     name: 'ella',
     gender: 'female',
     gender_probability: 0.99,
-    sample_size: 1234,
     age: 46,
     age_group: 'adult',
-    country_id: 'DRC',
-
+    country_id: 'CD',
+    country_name: 'Congo - Kinshasa',
     country_probability: 0.85,
     created_at: '2026-04-01T12:00:00Z',
   };
 
   beforeEach(async () => {
+    createMock.mockReset();
+    findOneMock.mockReset();
+    findAllMock.mockReset();
+    searchMock.mockReset();
+    removeMock.mockReset();
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProfilesController],
       providers: [
         {
           provide: ProfilesService,
           useValue: {
-            create: jest.fn().mockResolvedValue({
+            create: createMock.mockResolvedValue({
               status: 'success',
               data: mockProfile,
             }),
-            findOne: jest.fn().mockResolvedValue({
+            findOne: findOneMock.mockResolvedValue({
               status: 'success',
               data: mockProfile,
             }),
-            findAll: jest.fn().mockResolvedValue({
+            findAll: findAllMock.mockResolvedValue({
               status: 'success',
-              count: 1,
+              page: 1,
+              limit: 10,
+              total: 1,
               data: [mockProfile],
             }),
-            remove: jest.fn().mockResolvedValue(undefined),
+            search: searchMock.mockResolvedValue({
+              status: 'success',
+              page: 1,
+              limit: 10,
+              total: 1,
+              data: [mockProfile],
+            }),
+            remove: removeMock.mockResolvedValue(undefined),
           },
         },
       ],
     }).compile();
 
     controller = module.get<ProfilesController>(ProfilesController);
-    service = module.get<ProfilesService>(ProfilesService);
   });
 
   it('should be defined', () => {
@@ -60,7 +77,7 @@ describe('ProfilesController', () => {
       const dto = { name: 'ella' };
       const result = await controller.create(dto);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
+      expect(createMock).toHaveBeenCalledWith(dto);
       expect(result.status).toBe('success');
     });
   });
@@ -69,28 +86,65 @@ describe('ProfilesController', () => {
     it('should return profile by id', async () => {
       const result = await controller.findOne('test-id');
 
-      expect(service.findOne).toHaveBeenCalledWith('test-id');
+      expect(findOneMock).toHaveBeenCalledWith('test-id');
       expect(result.status).toBe('success');
     });
   });
 
   describe('findAll()', () => {
     it('should return filtered profiles', async () => {
-      const result = await controller.findAll('male', 'NG', 'adult');
+      const result = await controller.findAll(
+        'male',
+        'adult',
+        'NG',
+        '25',
+        '40',
+        '0.7',
+        '0.5',
+        'age',
+        'desc',
+        '1',
+        '10',
+      );
 
-      expect(service.findAll).toHaveBeenCalledWith({
+      expect(findAllMock).toHaveBeenCalledWith({
         gender: 'male',
-        country_id: 'NG',
         age_group: 'adult',
+        country_id: 'NG',
+        min_age: '25',
+        max_age: '40',
+        min_gender_probability: '0.7',
+        min_country_probability: '0.5',
+        sort_by: 'age',
+        order: 'desc',
+        page: '1',
+        limit: '10',
       });
-      expect(result.count).toBe(1);
+      expect(result.total).toBe(1);
+    });
+  });
+
+  describe('search()', () => {
+    it('should forward the natural language query to the service', async () => {
+      const result = await controller.search(
+        'young males from nigeria',
+        '2',
+        '5',
+      );
+
+      expect(searchMock).toHaveBeenCalledWith({
+        q: 'young males from nigeria',
+        page: '2',
+        limit: '5',
+      });
+      expect(result.total).toBe(1);
     });
   });
 
   describe('remove()', () => {
     it('should call service.remove', async () => {
       await controller.remove('test-id');
-      expect(service.remove).toHaveBeenCalledWith('test-id');
+      expect(removeMock).toHaveBeenCalledWith('test-id');
     });
   });
 });

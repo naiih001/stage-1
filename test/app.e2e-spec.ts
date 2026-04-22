@@ -1,9 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
-
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import request, { Response } from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/profiles/prisma.service';
+
+interface ProfileResponseBody {
+  status: string;
+  data: {
+    id: string;
+    name: string;
+  };
+}
+
+interface ProfilesListResponseBody {
+  status: string;
+  page: number;
+  limit: number;
+  total: number;
+  data: Array<{ id: string }>;
+}
 
 describe('ProfilesController (e2e)', () => {
   let app: INestApplication;
@@ -21,7 +36,6 @@ describe('ProfilesController (e2e)', () => {
   });
 
   beforeEach(async () => {
-    // Clean database before each test
     await prisma.profile.deleteMany({});
   });
 
@@ -32,14 +46,15 @@ describe('ProfilesController (e2e)', () => {
   });
 
   it('POST /api/profiles - should create a new profile', async () => {
-    const res = await request(app.getHttpServer())
+    const res: Response = await request(app.getHttpServer())
       .post('/api/profiles')
-      .send({ name: 'testuser' })
-      .expect(201);
+      .send({ name: 'testuser' });
+    const body = res.body as ProfileResponseBody;
 
-    expect(res.body.status).toBe('success');
-    expect(res.body.data.name).toBe('testuser');
-    expect(res.body.data).toHaveProperty('id');
+    expect(res.status).toBe(201);
+    expect(body.status).toBe('success');
+    expect(body.data.name).toBe('testuser');
+    expect(body.data.id).toBeDefined();
   });
 
   it('POST /api/profiles - should return existing profile (Idempotency)', async () => {
@@ -50,17 +65,19 @@ describe('ProfilesController (e2e)', () => {
   });
 
   it('GET /api/profiles/:id', async () => {
-    const createRes = await request(app.getHttpServer())
+    const createRes: Response = await request(app.getHttpServer())
       .post('/api/profiles')
       .send({ name: 'emmanuel' });
+    const createBody = createRes.body as ProfileResponseBody;
 
-    const id = createRes.body.data.id;
+    const id = createBody.data.id;
 
-    const res = await request(app.getHttpServer())
+    const res: Response = await request(app.getHttpServer())
       .get(`/api/profiles/${id}`)
       .expect(200);
+    const body = res.body as ProfileResponseBody;
 
-    expect(res.body.data.id).toBe(id);
+    expect(body.data.id).toBe(id);
   });
 
   it('GET /api/profiles with query filters', async () => {
@@ -68,21 +85,23 @@ describe('ProfilesController (e2e)', () => {
       .post('/api/profiles')
       .send({ name: 'sarah' });
 
-    const res = await request(app.getHttpServer())
+    const res: Response = await request(app.getHttpServer())
       .get('/api/profiles?gender=female')
       .expect(200);
+    const body = res.body as ProfilesListResponseBody;
 
-    expect(res.body).toHaveProperty('count');
-    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(body.total).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(body.data)).toBe(true);
   });
 
   it('DELETE /api/profiles/:id', async () => {
-    const createRes = await request(app.getHttpServer())
+    const createRes: Response = await request(app.getHttpServer())
       .post('/api/profiles')
       .send({ name: 'tobedeleted' });
+    const createBody = createRes.body as ProfileResponseBody;
 
     await request(app.getHttpServer())
-      .delete(`/api/profiles/${createRes.body.data.id}`)
+      .delete(`/api/profiles/${createBody.data.id}`)
       .expect(204);
   });
 });

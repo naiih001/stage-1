@@ -14,6 +14,12 @@
     "start:prod": "node dist/src/main.js",
     "prisma:generate": "npx prisma generate",
     "prisma:migrate": "npx prisma migrate deploy",
+    "prisma:seed": "node prisma/seed.js",
+    "prisma:seed:profiles": "SEED_FILE=${SEED_FILE:-prisma/seed_profiles.json} node prisma/seed.js",
+    "prisma:seed:dev": "DATABASE_URL=${DATABASE_URL_DEV:-postgresql://postgres:password@localhost:5432/profile_db?schema=public} SEED_FILE=${SEED_FILE:-prisma/seed_profiles.json} node prisma/seed.js",
+    "prisma:migrate:prod": "DATABASE_URL=${DATABASE_URL_PROD:-${DATABASE_URL:?DATABASE_URL or DATABASE_URL_PROD is required}} npx prisma migrate deploy",
+    "prisma:seed:prod": "DATABASE_URL=${DATABASE_URL_PROD:-${DATABASE_URL:?DATABASE_URL or DATABASE_URL_PROD is required}} SEED_FILE=${SEED_FILE:-prisma/seed_profiles.json} node prisma/seed.js",
+    "prisma:deploy:prod": "DATABASE_URL=${DATABASE_URL_PROD:-${DATABASE_URL:?DATABASE_URL or DATABASE_URL_PROD is required}} npx prisma migrate deploy && DATABASE_URL=${DATABASE_URL_PROD:-${DATABASE_URL:?DATABASE_URL or DATABASE_URL_PROD is required}} SEED_FILE=${SEED_FILE:-prisma/seed_profiles.json} node prisma/seed.js",
     "prisma:stduio": "npx prisma studio",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
@@ -21,6 +27,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

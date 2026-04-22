@@ -5,11 +5,21 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { Profile } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { uuidv7 } from 'uuidv7';
 import { CreateProfileDto } from './dto/create-profile.dto';
+import { getCountryName } from './country-reference';
+import {
+  buildOrderBy,
+  buildWhereClause,
+  normalizeProfileQuery,
+  parseNaturalLanguageQuery,
+  ProfileQueryOptions,
+  SearchQueryOptions,
+} from './query-engine';
 
 interface ApiResponse {
   gender?: string;
@@ -31,7 +41,7 @@ export class ProfilesService {
   private async fetchApi<T>(url: string): Promise<T> {
     try {
       const response = await firstValueFrom(this.httpService.get(url));
-      return response.data;
+      return response.data as T;
     } catch {
       this.logger.error(`External API request failed: ${url}`);
       throw new HttpException('External API failed', HttpStatus.BAD_GATEWAY);
@@ -44,12 +54,11 @@ export class ProfilesService {
       throw new BadRequestException('Name is required');
     }
 
-    const lowerName = name.toLowerCase().trim();
-    this.logger.log(`Create profile requested for name=${lowerName}`);
+    const normalizedName = name.trim();
+    this.logger.log(`Create profile requested for name=${normalizedName}`);
 
-    // Check idempotency
-    const existing = await this.prisma.profile.findUnique({
-      where: { name: lowerName },
+    const existing = await this.prisma.profile.findFirst({
+      where: { name: { equals: normalizedName, mode: 'insensitive' } },
     });
 
     if (existing) {
@@ -63,15 +72,24 @@ export class ProfilesService {
 
     // Fetch from all APIs
     const [genderData, ageData, nationalData] = await Promise.all([
-      this.fetchApi<ApiResponse>(`https://api.genderize.io?name=${lowerName}`),
-      this.fetchApi<ApiResponse>(`https://api.agify.io?name=${lowerName}`),
       this.fetchApi<ApiResponse>(
-        `https://api.nationalize.io?name=${lowerName}`,
+        `https://api.genderize.io/?name=${encodeURIComponent(normalizedName)}`,
+      ),
+      this.fetchApi<ApiResponse>(
+        `https://api.agify.io/?name=${encodeURIComponent(normalizedName)}`,
+      ),
+      this.fetchApi<ApiResponse>(
+        `https://api.nationalize.io/?name=${encodeURIComponent(normalizedName)}`,
       ),
     ]);
 
     // Validation
-    if (!genderData.gender || genderData.count === 0) {
+    if (
+      !genderData.gender ||
+      genderData.count === 0 ||
+      genderData.probability === null ||
+      genderData.probability === undefined
+    ) {
       throw new HttpException('Genderize returned an invalid response', 502);
     }
     if (ageData.age === null || ageData.age === undefined) {
@@ -85,6 +103,14 @@ export class ProfilesService {
       curr.probability > prev.probability ? curr : prev,
     );
 
+    if (
+      !topCountry.country_id ||
+      topCountry.probability === null ||
+      topCountry.probability === undefined
+    ) {
+      throw new HttpException('Nationalize returned an invalid response', 502);
+    }
+
     const ageGroup =
       ageData.age <= 12
         ? 'child'
@@ -97,13 +123,13 @@ export class ProfilesService {
     const profile = await this.prisma.profile.create({
       data: {
         id: uuidv7(),
-        name: lowerName,
+        name: normalizedName,
         gender: genderData.gender,
         genderProbability: genderData.probability,
-        sampleSize: genderData.count,
         age: ageData.age,
         ageGroup,
         countryId: topCountry.country_id,
+        countryName: getCountryName(topCountry.country_id),
         countryProbability: topCountry.probability,
       },
     });
@@ -124,35 +150,20 @@ export class ProfilesService {
     return { status: 'success', data: this.formatProfile(profile) };
   }
 
-  async findAll(filters: {
-    gender?: string;
-    country_id?: string;
-    age_group?: string;
-  }) {
-    this.logger.log(`Listing profiles with filters=${JSON.stringify(filters)}`);
-    const where: any = {};
+  async findAll(query: ProfileQueryOptions) {
+    const normalized = normalizeProfileQuery(query);
+    this.logger.log(
+      `Listing profiles with query=${JSON.stringify(normalized)}`,
+    );
+    return this.queryProfiles(normalized);
+  }
 
-    if (filters.gender) where.gender = filters.gender.toLowerCase();
-    if (filters.country_id) where.countryId = filters.country_id.toUpperCase();
-    if (filters.age_group) where.ageGroup = filters.age_group.toLowerCase();
-
-    const profiles = await this.prisma.profile.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        gender: true,
-        age: true,
-        ageGroup: true,
-        countryId: true,
-      },
-    });
-
-    return {
-      status: 'success',
-      count: profiles.length,
-      data: profiles.map((profile) => this.formatListProfile(profile)),
-    };
+  async search(query: SearchQueryOptions) {
+    const normalized = parseNaturalLanguageQuery(query);
+    this.logger.log(
+      `Searching profiles with query=${JSON.stringify(normalized)}`,
+    );
+    return this.queryProfiles(normalized);
   }
 
   async remove(id: string) {
@@ -164,30 +175,42 @@ export class ProfilesService {
     return; // 204 No Content
   }
 
-  private formatProfile(profile: any) {
+  private formatProfile(profile: Profile) {
     return {
       id: profile.id,
       name: profile.name,
-
       gender: profile.gender,
       gender_probability: profile.genderProbability,
-      sample_size: profile.sampleSize,
       age: profile.age,
       age_group: profile.ageGroup,
       country_id: profile.countryId,
+      country_name: profile.countryName,
       country_probability: profile.countryProbability,
       created_at: profile.createdAt.toISOString(),
     };
   }
 
-  private formatListProfile(profile: any) {
+  private async queryProfiles(query: ReturnType<typeof normalizeProfileQuery>) {
+    const where = buildWhereClause(query);
+    const orderBy = buildOrderBy(query);
+    const skip = (query.page - 1) * query.limit;
+
+    const [total, profiles] = await this.prisma.$transaction([
+      this.prisma.profile.count({ where }),
+      this.prisma.profile.findMany({
+        where,
+        orderBy,
+        skip,
+        take: query.limit,
+      }),
+    ]);
+
     return {
-      id: profile.id,
-      name: profile.name,
-      gender: profile.gender,
-      age: profile.age,
-      age_group: profile.ageGroup,
-      country_id: profile.countryId,
+      status: 'success',
+      page: query.page,
+      limit: query.limit,
+      total,
+      data: profiles.map((profile) => this.formatProfile(profile)),
     };
   }
 }
