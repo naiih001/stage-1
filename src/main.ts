@@ -1,63 +1,73 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { RequestMethod } from '@nestjs/common';
 import {
-  BadRequestException,
-  Logger,
-  UnprocessableEntityException,
-  ValidationPipe,
+    BadRequestException,
+    Logger,
+    UnprocessableEntityException,
+    ValidationPipe,
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { Request, Response, NextFunction } from 'express';
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
-  const port = Number(process.env.PORT ?? 3000);
-  const host = process.env.HOST ?? '0.0.0.0';
+    const logger = new Logger('Bootstrap');
+    const app = await NestFactory.create(AppModule);
+    const port = Number(process.env.PORT ?? 3000);
+    const host = process.env.HOST ?? '0.0.0.0';
 
-  app.enableCors({ origin: '*' });
-  app.setGlobalPrefix('api');
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const startedAt = Date.now();
-
-    res.on('finish', () => {
-      const durationMs = Date.now() - startedAt;
-      logger.log(
-        `${req.method} ${req.originalUrl} ${res.statusCode} - ${durationMs}ms`,
-      );
+    app.enableCors({ origin: '*' });
+    app.setGlobalPrefix('api', {
+        exclude: [
+            { path: 'auth/github', method: RequestMethod.GET },
+            { path: 'auth/github/callback', method: RequestMethod.GET },
+            { path: 'auth/github/cli/callback', method: RequestMethod.POST },
+            { path: 'auth/refresh', method: RequestMethod.POST },
+            { path: 'auth/logout', method: RequestMethod.POST },
+            { path: 'auth/me', method: RequestMethod.POST },
+        ],
     });
+    app.use((req: Request, res: Response, next: NextFunction) => {
+        const startedAt = Date.now();
 
-    next();
-  });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      exceptionFactory: (errors: ValidationError[]) => {
-        const hasTypeError = errors.some((error) =>
-          Object.hasOwn(error.constraints ?? {}, 'isString'),
-        );
+        res.on('finish', () => {
+            const durationMs = Date.now() - startedAt;
+            logger.log(
+                `${req.method} ${req.originalUrl} ${res.statusCode} - ${durationMs}ms`,
+            );
+        });
 
-        const hasEmptyNameError = errors.some((error) =>
-          Object.hasOwn(error.constraints ?? {}, 'isNotEmpty'),
-        );
+        next();
+    });
+    app.useGlobalPipes(
+        new ValidationPipe({
+            transform: true,
+            whitelist: true,
+            exceptionFactory: (errors: ValidationError[]) => {
+                const hasTypeError = errors.some((error) =>
+                    Object.hasOwn(error.constraints ?? {}, 'isString'),
+                );
 
-        if (hasTypeError) {
-          return new UnprocessableEntityException('Invalid type');
-        }
+                const hasEmptyNameError = errors.some((error) =>
+                    Object.hasOwn(error.constraints ?? {}, 'isNotEmpty'),
+                );
 
-        if (hasEmptyNameError) {
-          return new BadRequestException('Name is required');
-        }
+                if (hasTypeError) {
+                    return new UnprocessableEntityException('Invalid type');
+                }
 
-        return new BadRequestException('Bad Request');
-      },
-    }),
-  );
-  app.useGlobalFilters(new HttpExceptionFilter());
+                if (hasEmptyNameError) {
+                    return new BadRequestException('Name is required');
+                }
 
-  await app.listen(port, host);
-  logger.log(`Application listening on http://${host}:${port}/api`);
+                return new BadRequestException('Bad Request');
+            },
+        }),
+    );
+    app.useGlobalFilters(new HttpExceptionFilter());
+
+    await app.listen(port, host);
+    logger.log(`Application listening on http://${host}:${port}/api`);
 }
 void bootstrap();
