@@ -135,7 +135,7 @@ export class ProfilesService {
 
   async findAll(query: ProfileQueryDto) {
     this.logger.log(`Listing profiles with query=${JSON.stringify(query)}`);
-    return this.queryProfiles(query);
+    return this.queryProfiles(query, false);
   }
 
   async search(searchQuery: SearchQueryDto) {
@@ -151,9 +151,10 @@ export class ProfilesService {
       ...derived,
       page: searchQuery.page,
       limit: searchQuery.limit,
-    };
+      q: searchQuery.q,
+    } as any;
 
-    return this.queryProfiles(combinedQuery);
+    return this.queryProfiles(combinedQuery, true);
   }
 
   async remove(id: string) {
@@ -181,7 +182,7 @@ export class ProfilesService {
     };
   }
 
-  private async queryProfiles(query: ProfileQueryDto) {
+  private async queryProfiles(query: ProfileQueryDto, isSearch = false) {
     const where = buildWhereClause(query);
     const orderBy = buildOrderBy(query);
     const page = query.page ?? 1;
@@ -198,11 +199,32 @@ export class ProfilesService {
       }),
     ]);
 
+    const totalPages = Math.ceil(total / limit);
+    const baseUrl = isSearch ? '/api/profiles/search' : '/api/profiles';
+
+    const buildUrl = (p: number) => {
+      const urlParams = new URLSearchParams();
+      Object.entries(query).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          urlParams.set(key, String(value));
+        }
+      });
+      urlParams.set('page', String(p));
+      urlParams.set('limit', String(limit));
+      return `${baseUrl}?${urlParams.toString()}`;
+    };
+
     return {
       status: 'success',
       page,
       limit,
       total,
+      total_pages: totalPages,
+      links: {
+        self: buildUrl(page),
+        next: page < totalPages ? buildUrl(page + 1) : null,
+        prev: page > 1 ? buildUrl(page - 1) : null,
+      },
       data: profiles.map((profile) => this.formatProfile(profile)),
     };
   }
