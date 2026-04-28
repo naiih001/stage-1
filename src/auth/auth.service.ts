@@ -54,12 +54,12 @@ export class AuthService {
     
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get('JWT_ACCESS_SECRET'),
-      expiresIn: '15m',
+      expiresIn: '3m',
     });
 
     const refreshTokenString = uuidv7();
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5); // 5 minutes
 
     await this.prisma.refreshToken.create({
       data: {
