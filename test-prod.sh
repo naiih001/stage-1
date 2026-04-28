@@ -6,7 +6,8 @@ set -o pipefail
 BASE_URL="${1:-http://localhost:3000}"
 BASE_URL="${BASE_URL%/}"
 API_BASE="$BASE_URL/api/profiles"
-TEST_NAME="${TEST_NAME:-Ada}"
+TEST_NAME_SIMPLE="Ada"
+TEST_NAME_UNIQUE="${TEST_NAME_SIMPLE}_$(date +%s)"
 
 FAILURES=0
 RESPONSE_CODE=""
@@ -75,6 +76,7 @@ run_request() {
   fi
 
   rm -f "$tmp_body"
+  sleep 2
   return 0
 }
 
@@ -169,29 +171,38 @@ assert_json_field_equals "page" "1" "List profiles default query"
 assert_json_field_equals "limit" "10" "List profiles default query"
 assert_json_field_present "total" "List profiles default query"
 
-run_request "Create profile" POST "$API_BASE" "{\"name\":\"$TEST_NAME\"}"
-assert_status 201 "Create profile"
-assert_json_field_equals "status" "success" "Create profile"
-assert_json_field_present "data.id" "Create profile"
-assert_json_field_equals "data.name" "$TEST_NAME" "Create profile"
+INITIAL_TOTAL="$(extract_json_field 'total' || echo 0)"
+printf 'Initial total count: %s\n' "$INITIAL_TOTAL"
 
-CREATED_ID="$(extract_json_field 'data.id' || true)"
-CREATED_GENDER="$(extract_json_field 'data.gender' || true)"
-CREATED_COUNTRY_ID="$(extract_json_field 'data.country_id' || true)"
-CREATED_COUNTRY_NAME="$(extract_json_field 'data.country_name' || true)"
-CREATED_AGE="$(extract_json_field 'data.age' || true)"
-CREATED_AGE_GROUP="$(extract_json_field 'data.age_group' || true)"
-FIRST_CREATED_ID="$CREATED_ID"
+run_request "Create profile" POST "$API_BASE" "{\"name\":\"$TEST_NAME_UNIQUE\"}"
+if [[ "$RESPONSE_CODE" == "201" ]]; then
+  assert_json_field_equals "status" "success" "Create profile"
+  assert_json_field_present "data.id" "Create profile"
+  assert_json_field_equals "data.name" "$TEST_NAME_UNIQUE" "Create profile"
 
-printf 'Captured id=%s gender=%s country_id=%s country_name=%s age=%s age_group=%s\n' \
-  "${CREATED_ID:-unknown}" "${CREATED_GENDER:-unknown}" "${CREATED_COUNTRY_ID:-unknown}" \
-  "${CREATED_COUNTRY_NAME:-unknown}" "${CREATED_AGE:-unknown}" "${CREATED_AGE_GROUP:-unknown}"
+  run_request "Verify count incremented" GET "$API_BASE"
+  assert_json_field_equals "total" "$((INITIAL_TOTAL + 1))" "Verify count incremented"
 
-run_request "Create same profile again" POST "$API_BASE" "{\"name\":\"$TEST_NAME\"}"
-assert_status 201 "Create same profile again"
-assert_json_field_equals "status" "success" "Create same profile again"
-assert_json_field_equals "message" "Profile already exists" "Create same profile again"
-assert_json_field_equals "data.id" "$FIRST_CREATED_ID" "Create same profile again"
+  CREATED_ID="$(extract_json_field 'data.id' || true)"
+  CREATED_GENDER="$(extract_json_field 'data.gender' || true)"
+  CREATED_COUNTRY_ID="$(extract_json_field 'data.country_id' || true)"
+  CREATED_COUNTRY_NAME="$(extract_json_field 'data.country_name' || true)"
+  CREATED_AGE="$(extract_json_field 'data.age' || true)"
+  CREATED_AGE_GROUP="$(extract_json_field 'data.age_group' || true)"
+  FIRST_CREATED_ID="$CREATED_ID"
+
+  printf 'Captured id=%s gender=%s country_id=%s country_name=%s age=%s age_group=%s\n' \
+    "${CREATED_ID:-unknown}" "${CREATED_GENDER:-unknown}" "${CREATED_COUNTRY_ID:-unknown}" \
+    "${CREATED_COUNTRY_NAME:-unknown}" "${CREATED_AGE:-unknown}" "${CREATED_AGE_GROUP:-unknown}"
+
+  run_request "Create same profile again" POST "$API_BASE" "{\"name\":\"$TEST_NAME_UNIQUE\"}"
+  assert_status 201 "Create same profile again"
+  assert_json_field_equals "status" "success" "Create same profile again"
+  assert_json_field_equals "message" "Profile already exists" "Create same profile again"
+  assert_json_field_equals "data.id" "$FIRST_CREATED_ID" "Create same profile again"
+else
+  record_failure "Create profile failed with $RESPONSE_CODE, skipping dependent tests"
+fi
 
 if [[ -n "$CREATED_ID" ]]; then
   run_request "Fetch created profile" GET "$API_BASE/$CREATED_ID"
@@ -213,6 +224,10 @@ assert_json_field_equals "status" "success" "Pagination and sorting"
 assert_json_field_equals "page" "1" "Pagination and sorting"
 assert_json_field_equals "limit" "1" "Pagination and sorting"
 
+run_request "Sort by gender probability" GET "$API_BASE?sort_by=gender_probability&order=asc"
+assert_status 200 "Sort by gender probability"
+assert_json_field_equals "status" "success" "Sort by gender probability"
+
 if [[ -n "$CREATED_GENDER" && -n "$CREATED_COUNTRY_ID" ]]; then
   run_request "Natural-language search" GET "$API_BASE/search?q=${CREATED_GENDER}s%20from%20$CREATED_COUNTRY_ID&page=1&limit=10"
   assert_status 200 "Natural-language search"
@@ -220,10 +235,31 @@ if [[ -n "$CREATED_GENDER" && -n "$CREATED_COUNTRY_ID" ]]; then
   assert_response_contains_id "$CREATED_ID" "Natural-language search"
 fi
 
+run_request "NLP search: young" GET "$API_BASE/search?q=young%20people"
+assert_status 200 "NLP search: young"
+
+run_request "NLP search: age above" GET "$API_BASE/search?q=people%20older%20than%2040"
+assert_status 200 "NLP search: age above"
+
+run_request "NLP search: age under" GET "$API_BASE/search?q=people%20under%2020"
+assert_status 200 "NLP search: age under"
+
 run_request "Invalid filter validation" GET "$API_BASE?gender=robot"
 assert_status 422 "Invalid filter validation"
 assert_json_field_equals "status" "error" "Invalid filter validation"
 assert_json_field_equals "message" "Invalid query parameters" "Invalid filter validation"
+
+run_request "Limit boundary validation (too high)" GET "$API_BASE?limit=51"
+assert_status 422 "Limit boundary validation (too high)"
+assert_json_field_equals "message" "Invalid query parameters" "Limit boundary validation (too high)"
+
+run_request "Page boundary validation (too low)" GET "$API_BASE?page=0"
+assert_status 422 "Page boundary validation (too low)"
+assert_json_field_equals "message" "Invalid query parameters" "Page boundary validation (too low)"
+
+run_request "Missing search query validation" GET "$API_BASE/search"
+assert_status 422 "Missing search query validation"
+assert_json_field_equals "message" "Invalid query parameters" "Missing search query validation"
 
 run_request "Uninterpretable search validation" GET "$API_BASE/search?q=show%20me%20something%20useful"
 assert_status 400 "Uninterpretable search validation"
@@ -238,6 +274,9 @@ if [[ -n "$CREATED_ID" ]]; then
   assert_status 404 "Fetch deleted profile"
   assert_json_field_equals "status" "error" "Fetch deleted profile"
   assert_json_field_equals "message" "Profile not found" "Fetch deleted profile"
+
+  run_request "Verify count decremented" GET "$API_BASE"
+  assert_json_field_equals "total" "$INITIAL_TOTAL" "Verify count decremented"
 fi
 
 print_section "Summary"

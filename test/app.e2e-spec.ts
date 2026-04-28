@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request, { Response } from 'supertest';
 import { AppModule } from './../src/app.module';
-import { PrismaService } from '../src/profiles/prisma.service';
 
 interface ProfileResponseBody {
   status: string;
