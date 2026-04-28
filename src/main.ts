@@ -39,16 +39,14 @@ async function bootstrap() {
             exceptionFactory: (errors: ValidationError[]) => {
                 const firstError = errors[0];
                 const constraints = firstError.constraints ?? {};
-                
-                if (constraints.isString) {
-                    return new UnprocessableEntityException('Invalid type');
-                }
 
                 if (constraints.isNotEmpty) {
                     return new BadRequestException('Name is required');
                 }
 
-                return new BadRequestException('Bad Request');
+                return new UnprocessableEntityException(
+                    'Invalid query parameters',
+                );
             },
         }),
     );

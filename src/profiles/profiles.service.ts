@@ -141,7 +141,11 @@ export class ProfilesService {
   async search(searchQuery: SearchQueryDto) {
     this.logger.log(`Searching profiles with q=${searchQuery.q}`);
     const derived = parseNaturalLanguageQuery(searchQuery.q);
-    
+
+    if (Object.keys(derived).length === 0) {
+      throw new BadRequestException('Unable to interpret query');
+    }
+
     const combinedQuery: ProfileQueryDto = {
       ...new ProfileQueryDto(),
       ...derived,
