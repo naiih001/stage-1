@@ -5,6 +5,9 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ProfilesModule } from './profiles/profiles.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { VersionHeaderMiddleware } from './common/middleware/version-header.middleware';
+import { NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 
 @Module({
   imports: [
@@ -18,6 +21,7 @@ import { PrismaModule } from './prisma/prisma.module';
     HttpModule,
     PrismaModule,
     ProfilesModule,
+    AuthModule,
   ],
   providers: [
     {
@@ -26,4 +30,13 @@ import { PrismaModule } from './prisma/prisma.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(VersionHeaderMiddleware)
+      .forRoutes(
+        { path: 'profiles', method: RequestMethod.ALL },
+        { path: 'profiles/(.*)', method: RequestMethod.ALL },
+      );
+  }
+}

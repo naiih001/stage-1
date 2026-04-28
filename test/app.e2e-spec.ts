@@ -116,6 +116,7 @@ describe('ProfilesController (e2e)', () => {
     it('should perform the full lifecycle of a profile', async () => {
       const listRes1 = await request(app.getHttpServer())
         .get('/api/profiles')
+        .set('X-API-Version', '1')
         .expect(200);
       expect(listRes1.body.status).toBe('success');
       expect(listRes1.body.total).toBe(0);

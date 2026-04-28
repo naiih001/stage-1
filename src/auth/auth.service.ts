@@ -1,0 +1,109 @@
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../prisma/prisma.service';
+import { uuidv7 } from 'uuidv7';
+import { ConfigService } from '@nestjs/config';
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+  ) {}
+
+  async validateGithubUser(profile: any) {
+    const { id: githubId, username, emails, _json } = profile;
+    const email = emails?.[0]?.value;
+    const avatarUrl = _json?.avatar_url;
+
+    let user = await this.prisma.user.findUnique({
+      where: { githubId: String(githubId) },
+    });
+
+    if (!user) {
+      this.logger.log(`Creating new user for GitHub ID: ${githubId}`);
+      user = await this.prisma.user.create({
+        data: {
+          id: uuidv7(),
+          githubId: String(githubId),
+          username: username || `user_${githubId}`,
+          email,
+          avatarUrl,
+        },
+      });
+    } else {
+      // Update user info if needed
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          username: username || user.username,
+          email: email || user.email,
+          avatarUrl: avatarUrl || user.avatarUrl,
+        },
+      });
+    }
+
+    return user;
+  }
+
+  async login(user: any) {
+    const payload = { sub: user.id, username: user.username };
+    
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_ACCESS_SECRET'),
+      expiresIn: '15m',
+    });
+
+    const refreshTokenString = uuidv7();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+
+    await this.prisma.refreshToken.create({
+      data: {
+        id: uuidv7(),
+        token: refreshTokenString,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshTokenString,
+    };
+  }
+
+  async refreshTokens(refreshToken: string) {
+    const tokenDoc = await this.prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true },
+    });
+
+    if (!tokenDoc || tokenDoc.expiresAt < new Date()) {
+      if (tokenDoc) {
+        await this.prisma.refreshToken.delete({ where: { id: tokenDoc.id } });
+      }
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Revoke old token
+    await this.prisma.refreshToken.delete({ where: { id: tokenDoc.id } });
+
+    // Issue new tokens
+    return this.login(tokenDoc.user);
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      await this.prisma.refreshToken.delete({
+        where: { token: refreshToken },
+      });
+    } catch {
+      // Ignore if token doesn't exist
+    }
+    return { message: 'Logged out successfully' };
+  }
+}
