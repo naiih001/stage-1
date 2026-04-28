@@ -20,7 +20,7 @@ describe('AuthController (e2e)', () => {
             JWT_REFRESH_SECRET: 'test-refresh-secret',
             GITHUB_CLIENT_ID: 'test-client-id',
             GITHUB_CLIENT_SECRET: 'test-client-secret',
-            GITHUB_CALLBACK_URL: 'http://localhost:3000/api/v1/auth/github/callback',
+            GITHUB_CALLBACK_URL: 'http://localhost:3000/api/auth/github/callback',
           })],
         }),
         AppModule,
@@ -45,7 +45,7 @@ describe('AuthController (e2e)', () => {
     await app.close();
   });
 
-  describe('POST /api/v1/auth/refresh', () => {
+  describe('POST /api/auth/refresh', () => {
     it('should refresh tokens given a valid refresh token', async () => {
       // 1. Create a user
       const user = await prisma.user.create({
@@ -72,7 +72,7 @@ describe('AuthController (e2e)', () => {
 
       // 3. Request refresh
       const res = await request(app.getHttpServer())
-        .post('/api/v1/auth/refresh')
+        .post('/api/auth/refresh')
         .send({ refresh_token: refreshTokenString })
         .expect(201);
 
@@ -89,13 +89,13 @@ describe('AuthController (e2e)', () => {
 
     it('should fail with invalid refresh token', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/auth/refresh')
+        .post('/api/auth/refresh')
         .send({ refresh_token: 'invalid' })
         .expect(401);
     });
   });
 
-  describe('POST /api/v1/auth/logout', () => {
+  describe('POST /api/auth/logout', () => {
     it('should revoke a refresh token', async () => {
       // 1. Create user and token
       const user = await prisma.user.create({
@@ -118,7 +118,7 @@ describe('AuthController (e2e)', () => {
 
       // 2. Logout
       await request(app.getHttpServer())
-        .post('/api/v1/auth/logout')
+        .post('/api/auth/logout')
         .send({ refresh_token: refreshTokenString })
         .expect(201);
 

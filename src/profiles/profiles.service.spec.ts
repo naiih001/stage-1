@@ -136,6 +136,9 @@ describe('ProfilesService', () => {
       expect(result.total).toBe(1);
       expect(result.page).toBe(2);
       expect(result.limit).toBe(5);
+      expect(result.total_pages).toBe(1);
+      expect(result.links).toBeDefined();
+      expect(result.links.self).toContain('page=2');
       expect(findManySpy).toHaveBeenCalledWith({
         where: {
           gender: 'female',
@@ -162,6 +165,10 @@ describe('ProfilesService', () => {
         limit: 10,
       });
       expect(result.total).toBe(1);
+      expect(result.total_pages).toBe(1);
+      expect(result.links).toBeDefined();
+      expect(result.links.self).toContain('api/profiles/search');
+      expect(result.links.self).toContain('q=adult+males+from+kenya');
       expect(findManySpy).toHaveBeenCalledWith({
         where: {
           gender: 'male',

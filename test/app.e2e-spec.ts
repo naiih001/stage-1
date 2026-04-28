@@ -30,6 +30,12 @@ interface ProfilesListResponseBody {
   page: number;
   limit: number;
   total: number;
+  total_pages: number;
+  links: {
+    self: string;
+    next: string | null;
+    prev: string | null;
+  };
   data: Array<{
     id: string;
     name: string;
@@ -76,7 +82,7 @@ describe('ProfilesController (e2e)', () => {
             JWT_REFRESH_SECRET: 'test-refresh-secret',
             GITHUB_CLIENT_ID: 'test-client-id',
             GITHUB_CLIENT_SECRET: 'test-client-secret',
-            GITHUB_CALLBACK_URL: 'http://localhost:3000/api/v1/auth/github/callback',
+            GITHUB_CALLBACK_URL: 'http://localhost:3000/api/auth/github/callback',
           })],
         }),
         AppModule,
@@ -218,6 +224,9 @@ describe('ProfilesController (e2e)', () => {
       expect(body.status).toBe('success');
       expect(body.page).toBe(1);
       expect(body.limit).toBe(1);
+      expect(body.total_pages).toBeDefined();
+      expect(body.links).toBeDefined();
+      expect(body.links.self).toContain('page=1');
       expect(body.data.length).toBeLessThanOrEqual(1);
     });
 
