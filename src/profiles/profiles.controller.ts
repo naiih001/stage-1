@@ -8,16 +8,20 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { ProfilesService } from './profiles.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
 
 @Controller('profiles')
 export class ProfilesController {
+  private readonly logger = new Logger(ProfilesController.name);
+
   constructor(private readonly profilesService: ProfilesService) {}
 
   @Post()
   async create(@Body() createProfileDto: CreateProfileDto) {
+    this.logger.log(`POST /profiles - payload: ${JSON.stringify(createProfileDto)}`);
     return this.profilesService.create(createProfileDto);
   }
 
@@ -27,6 +31,7 @@ export class ProfilesController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    this.logger.log(`GET /profiles/search - q=${q}, page=${page}, limit=${limit}`);
     return this.profilesService.search({ q, page, limit });
   }
 
@@ -44,6 +49,7 @@ export class ProfilesController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    this.logger.log(`GET /profiles - query: ${JSON.stringify({ gender, country_id, page, limit })}`);
     return this.profilesService.findAll({
       gender,
       age_group,
@@ -61,12 +67,14 @@ export class ProfilesController {
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
+    this.logger.log(`GET /profiles/${id}`);
     return this.profilesService.findOne(id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id') id: string) {
+    this.logger.log(`DELETE /profiles/${id}`);
     return this.profilesService.remove(id);
   }
 }
