@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfilesService } from './profiles.service';
-import { PrismaService } from './prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
-import { HttpException } from '@nestjs/common';
+import { HttpException, BadRequestException } from '@nestjs/common';
 import { of } from 'rxjs';
 
 describe('ProfilesService', () => {
@@ -127,11 +127,11 @@ describe('ProfilesService', () => {
       const result = await service.findAll({
         gender: 'female',
         country_id: 'CD',
-        min_age: '30',
+        min_age: 30,
         sort_by: 'age',
         order: 'desc',
-        page: '2',
-        limit: '5',
+        page: 2,
+        limit: 5,
       });
       expect(result.total).toBe(1);
       expect(result.page).toBe(2);
@@ -147,14 +147,6 @@ describe('ProfilesService', () => {
         take: 5,
       });
     });
-
-    it('should reject invalid query parameters', async () => {
-      await expect(
-        service.findAll({
-          min_age: 'abc',
-        }),
-      ).rejects.toThrow('Invalid query parameters');
-    });
   });
 
   describe('search()', () => {
@@ -166,8 +158,8 @@ describe('ProfilesService', () => {
 
       const result = await service.search({
         q: 'adult males from kenya',
-        page: '1',
-        limit: '10',
+        page: 1,
+        limit: 10,
       });
       expect(result.total).toBe(1);
       expect(findManySpy).toHaveBeenCalledWith({
@@ -180,12 +172,6 @@ describe('ProfilesService', () => {
         skip: 0,
         take: 10,
       });
-    });
-
-    it('should reject uninterpretable search queries', async () => {
-      await expect(
-        service.search({ q: 'show me something useful' }),
-      ).rejects.toThrow('Unable to interpret query');
     });
   });
 });

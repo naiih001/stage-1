@@ -18,16 +18,7 @@ async function bootstrap() {
     const host = process.env.HOST ?? '0.0.0.0';
 
     app.enableCors({ origin: '*' });
-    app.setGlobalPrefix('api', {
-        exclude: [
-            { path: 'auth/github', method: RequestMethod.GET },
-            { path: 'auth/github/callback', method: RequestMethod.GET },
-            { path: 'auth/github/cli/callback', method: RequestMethod.POST },
-            { path: 'auth/refresh', method: RequestMethod.POST },
-            { path: 'auth/logout', method: RequestMethod.POST },
-            { path: 'auth/me', method: RequestMethod.POST },
-        ],
-    });
+    app.setGlobalPrefix('api');
     app.use((req: Request, res: Response, next: NextFunction) => {
         const startedAt = Date.now();
 
@@ -44,20 +35,16 @@ async function bootstrap() {
         new ValidationPipe({
             transform: true,
             whitelist: true,
+            forbidNonWhitelisted: true,
             exceptionFactory: (errors: ValidationError[]) => {
-                const hasTypeError = errors.some((error) =>
-                    Object.hasOwn(error.constraints ?? {}, 'isString'),
-                );
-
-                const hasEmptyNameError = errors.some((error) =>
-                    Object.hasOwn(error.constraints ?? {}, 'isNotEmpty'),
-                );
-
-                if (hasTypeError) {
+                const firstError = errors[0];
+                const constraints = firstError.constraints ?? {};
+                
+                if (constraints.isString) {
                     return new UnprocessableEntityException('Invalid type');
                 }
 
-                if (hasEmptyNameError) {
+                if (constraints.isNotEmpty) {
                     return new BadRequestException('Name is required');
                 }
 

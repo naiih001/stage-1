@@ -6,19 +6,17 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Profile } from '@prisma/client';
-import { PrismaService } from './prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { uuidv7 } from 'uuidv7';
 import { CreateProfileDto } from './dto/create-profile.dto';
+import { ProfileQueryDto, SearchQueryDto } from './dto/profile-query.dto';
 import { getCountryName } from './country-reference';
 import {
   buildOrderBy,
   buildWhereClause,
-  normalizeProfileQuery,
   parseNaturalLanguageQuery,
-  ProfileQueryOptions,
-  SearchQueryOptions,
 } from './query-engine';
 
 interface ApiResponse {
@@ -50,10 +48,6 @@ export class ProfilesService {
 
   async create(createProfileDto: CreateProfileDto) {
     const { name } = createProfileDto;
-    if (!name?.trim()) {
-      throw new BadRequestException('Name is required');
-    }
-
     const normalizedName = name.trim();
     this.logger.log(`Create profile requested for name=${normalizedName}`);
 
@@ -70,7 +64,6 @@ export class ProfilesService {
       };
     }
 
-    // Fetch from all APIs
     const [genderData, ageData, nationalData] = await Promise.all([
       this.fetchApi<ApiResponse>(
         `https://api.genderize.io/?name=${encodeURIComponent(normalizedName)}`,
@@ -83,32 +76,22 @@ export class ProfilesService {
       ),
     ]);
 
-    // Validation
-    if (
-      !genderData.gender ||
-      genderData.count === 0 ||
-      genderData.probability === null ||
-      genderData.probability === undefined
-    ) {
-      throw new HttpException('Genderize returned an invalid response', 502);
+    if (!genderData.gender || genderData.count === 0 || genderData.probability === undefined) {
+      throw new HttpException('Genderize returned an invalid response', HttpStatus.BAD_GATEWAY);
     }
-    if (ageData.age === null || ageData.age === undefined) {
-      throw new HttpException('Agify returned an invalid response', 502);
+    if (ageData.age === undefined || ageData.age === null) {
+      throw new HttpException('Agify returned an invalid response', HttpStatus.BAD_GATEWAY);
     }
     if (!nationalData.country || nationalData.country.length === 0) {
-      throw new HttpException('Nationalize returned an invalid response', 502);
+      throw new HttpException('Nationalize returned an invalid response', HttpStatus.BAD_GATEWAY);
     }
 
     const topCountry = nationalData.country.reduce((prev, curr) =>
       curr.probability > prev.probability ? curr : prev,
     );
 
-    if (
-      !topCountry.country_id ||
-      topCountry.probability === null ||
-      topCountry.probability === undefined
-    ) {
-      throw new HttpException('Nationalize returned an invalid response', 502);
+    if (!topCountry.country_id || topCountry.probability === undefined) {
+      throw new HttpException('Nationalize returned an invalid response', HttpStatus.BAD_GATEWAY);
     }
 
     const ageGroup =
@@ -150,29 +133,33 @@ export class ProfilesService {
     return { status: 'success', data: this.formatProfile(profile) };
   }
 
-  async findAll(query: ProfileQueryOptions) {
-    const normalized = normalizeProfileQuery(query);
-    this.logger.log(
-      `Listing profiles with query=${JSON.stringify(normalized)}`,
-    );
-    return this.queryProfiles(normalized);
+  async findAll(query: ProfileQueryDto) {
+    this.logger.log(`Listing profiles with query=${JSON.stringify(query)}`);
+    return this.queryProfiles(query);
   }
 
-  async search(query: SearchQueryOptions) {
-    const normalized = parseNaturalLanguageQuery(query);
-    this.logger.log(
-      `Searching profiles with query=${JSON.stringify(normalized)}`,
-    );
-    return this.queryProfiles(normalized);
+  async search(searchQuery: SearchQueryDto) {
+    this.logger.log(`Searching profiles with q=${searchQuery.q}`);
+    const derived = parseNaturalLanguageQuery(searchQuery.q);
+    
+    const combinedQuery: ProfileQueryDto = {
+      ...new ProfileQueryDto(),
+      ...derived,
+      page: searchQuery.page,
+      limit: searchQuery.limit,
+    };
+
+    return this.queryProfiles(combinedQuery);
   }
 
   async remove(id: string) {
     this.logger.log(`Deleting profile id=${id}`);
-    await this.prisma.profile.delete({ where: { id } }).catch(() => {
+    try {
+      await this.prisma.profile.delete({ where: { id } });
+    } catch {
       throw new HttpException('Profile not found', HttpStatus.NOT_FOUND);
-    });
+    }
     this.logger.log(`Deleted profile id=${id}`);
-    return; // 204 No Content
   }
 
   private formatProfile(profile: Profile) {
@@ -190,10 +177,12 @@ export class ProfilesService {
     };
   }
 
-  private async queryProfiles(query: ReturnType<typeof normalizeProfileQuery>) {
+  private async queryProfiles(query: ProfileQueryDto) {
     const where = buildWhereClause(query);
     const orderBy = buildOrderBy(query);
-    const skip = (query.page - 1) * query.limit;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const skip = (page - 1) * limit;
 
     const [total, profiles] = await this.prisma.$transaction([
       this.prisma.profile.count({ where }),
@@ -201,14 +190,14 @@ export class ProfilesService {
         where,
         orderBy,
         skip,
-        take: query.limit,
+        take: limit,
       }),
     ]);
 
     return {
       status: 'success',
-      page: query.page,
-      limit: query.limit,
+      page,
+      limit,
       total,
       data: profiles.map((profile) => this.formatProfile(profile)),
     };

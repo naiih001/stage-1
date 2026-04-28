@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ProfilesModule } from './profiles/profiles.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ProfilesModule } from './profiles/profiles.module';
       },
     ]),
     HttpModule,
+    PrismaModule,
     ProfilesModule,
   ],
   providers: [

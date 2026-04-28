@@ -93,50 +93,36 @@ describe('ProfilesController', () => {
 
   describe('findAll()', () => {
     it('should return filtered profiles', async () => {
-      const result = await controller.findAll(
-        'male',
-        'adult',
-        'NG',
-        '25',
-        '40',
-        '0.7',
-        '0.5',
-        'age',
-        'desc',
-        '1',
-        '10',
-      );
-
-      expect(findAllMock).toHaveBeenCalledWith({
-        gender: 'male',
-        age_group: 'adult',
+      const query = {
+        gender: 'male' as const,
+        age_group: 'adult' as const,
         country_id: 'NG',
-        min_age: '25',
-        max_age: '40',
-        min_gender_probability: '0.7',
-        min_country_probability: '0.5',
-        sort_by: 'age',
-        order: 'desc',
-        page: '1',
-        limit: '10',
-      });
+        min_age: 25,
+        max_age: 40,
+        min_gender_probability: 0.7,
+        min_country_probability: 0.5,
+        sort_by: 'age' as const,
+        order: 'desc' as const,
+        page: 1,
+        limit: 10,
+      };
+      const result = await controller.findAll(query);
+
+      expect(findAllMock).toHaveBeenCalledWith(query);
       expect(result.total).toBe(1);
     });
   });
 
   describe('search()', () => {
     it('should forward the natural language query to the service', async () => {
-      const result = await controller.search(
-        'young males from nigeria',
-        '2',
-        '5',
-      );
-
-      expect(searchMock).toHaveBeenCalledWith({
+      const query = {
         q: 'young males from nigeria',
-        page: '2',
-        limit: '5',
-      });
+        page: 2,
+        limit: 5,
+      };
+      const result = await controller.search(query);
+
+      expect(searchMock).toHaveBeenCalledWith(query);
       expect(result.total).toBe(1);
     });
   });

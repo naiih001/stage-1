@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ProfilesService } from './profiles.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
+import { ProfileQueryDto, SearchQueryDto } from './dto/profile-query.dto';
 
 @Controller('profiles')
 export class ProfilesController {
@@ -26,43 +27,15 @@ export class ProfilesController {
   }
 
   @Get('search')
-  async search(
-    @Query('q') q?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    this.logger.log(`GET /profiles/search - q=${q}, page=${page}, limit=${limit}`);
-    return this.profilesService.search({ q, page, limit });
+  async search(@Query() query: SearchQueryDto) {
+    this.logger.log(`GET /profiles/search - query: ${JSON.stringify(query)}`);
+    return this.profilesService.search(query);
   }
 
   @Get()
-  async findAll(
-    @Query('gender') gender?: string,
-    @Query('age_group') age_group?: string,
-    @Query('country_id') country_id?: string,
-    @Query('min_age') min_age?: string,
-    @Query('max_age') max_age?: string,
-    @Query('min_gender_probability') min_gender_probability?: string,
-    @Query('min_country_probability') min_country_probability?: string,
-    @Query('sort_by') sort_by?: string,
-    @Query('order') order?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    this.logger.log(`GET /profiles - query: ${JSON.stringify({ gender, country_id, page, limit })}`);
-    return this.profilesService.findAll({
-      gender,
-      age_group,
-      country_id,
-      min_age,
-      max_age,
-      min_gender_probability,
-      min_country_probability,
-      sort_by,
-      order,
-      page,
-      limit,
-    });
+  async findAll(@Query() query: ProfileQueryDto) {
+    this.logger.log(`GET /profiles - query: ${JSON.stringify(query)}`);
+    return this.profilesService.findAll(query);
   }
 
   @Get(':id')
