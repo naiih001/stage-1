@@ -9,9 +9,10 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { GithubAuthGuard } from './guards/github-auth.guard';
-import { Request } from 'express';
+import type { Request } from 'express';
 
-@Controller('v1/auth')
+@Controller('/auth')
+
 export class AuthController {
   constructor(private authService: AuthService) {}
 
