@@ -10,6 +10,8 @@ import {
   HttpStatus,
   Logger,
   UseGuards,
+  Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { ProfilesService } from './profiles.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
@@ -47,6 +49,30 @@ export class ProfilesController {
   async findAll(@Query() query: ProfileQueryDto) {
     this.logger.log(`GET /profiles - query: ${JSON.stringify(query)}`);
     return this.profilesService.findAll(query);
+  }
+
+  @Get('export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ANALYST, Role.ADMIN)
+  async export(
+    @Query() query: ProfileQueryDto,
+    @Query('format') format: string,
+    @Res() res: any,
+  ) {
+    this.logger.log(`GET /profiles/export - format: ${format}`);
+    if (format !== 'csv') {
+      throw new BadRequestException('Invalid format. Only "csv" is supported.');
+    }
+
+    const csv = await this.profilesService.exportToCsv(query);
+    const timestamp = Date.now();
+
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': `attachment; filename="profiles_${timestamp}.csv"`,
+    });
+
+    return res.status(200).send(csv);
   }
 
   @Get(':id')

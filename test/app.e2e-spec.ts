@@ -9,6 +9,8 @@ import { ValidationError } from 'class-validator';
 import { HttpService } from '@nestjs/axios';
 import { of } from 'rxjs';
 import { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 interface ProfileResponseBody {
   status: string;
@@ -90,6 +92,8 @@ describe('ProfilesController (e2e)', () => {
     })
       .overrideProvider(HttpService)
       .useValue(mockHttpService)
+      .overrideProvider(APP_GUARD)
+      .useValue({ canActivate: () => true })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -117,6 +121,9 @@ describe('ProfilesController (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
 
     prisma = moduleFixture.get<PrismaService>(PrismaService);
+
+    await prisma.user.deleteMany({});
+    await prisma.profile.deleteMany({});
 
     await app.init();
   });
@@ -338,6 +345,76 @@ describe('ProfilesController (e2e)', () => {
         .expect(400);
       expect(res.body.status).toBe('error');
       expect(res.body.message).toBe('Unable to interpret query');
+    });
+  });
+
+  describe('Export (CSV)', () => {
+    let accessToken: string;
+
+    beforeAll(async () => {
+      const user = await prisma.user.upsert({
+        where: { id: '01964d85-6c50-7d11-a6e9-2081ea0f6666' },
+        update: {},
+        create: {
+          id: '01964d85-6c50-7d11-a6e9-2081ea0f6666',
+          githubId: '666666',
+          username: 'admin5',
+          role: 'ADMIN',
+        },
+      });
+      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      accessToken = jwtService.sign(
+        { sub: user.id, username: user.username, role: 'ADMIN' },
+        { secret: 'test-secret', expiresIn: '1h' }
+      );
+    });
+
+    beforeEach(async () => {
+      // Create some profiles to export
+      await request(app.getHttpServer())
+        .post('/api/profiles')
+        .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: 'John' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/api/profiles')
+        .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: 'Jane' })
+        .expect(201);
+    });
+
+    it('GET /api/profiles/export?format=csv - should export profiles as CSV', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/profiles/export?format=csv')
+        .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(res.header['content-type']).toContain('text/csv');
+      expect(res.header['content-disposition']).toContain('attachment; filename="profiles_');
+      expect(res.text).toContain('id,name,gender,gender_probability,age,age_group,country_id,country_name,country_probability,created_at');
+      expect(res.text).toContain('John');
+      expect(res.text).toContain('Jane');
+    });
+
+    it('GET /api/profiles/export?format=csv - should apply filters', async () => {
+      // Export only John by gender if John is male
+      await request(app.getHttpServer())
+        .get('/api/profiles/export?format=csv&gender=male')
+        .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+    });
+
+    it('GET /api/profiles/export?format=json - should return 422 for invalid format', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/profiles/export?format=json')
+        .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(422);
+      expect(res.body.message).toBe('Invalid query parameters');
     });
   });
 

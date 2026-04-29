@@ -166,6 +166,47 @@ export class ProfilesService {
     this.logger.log(`Deleted profile id=${id}`);
   }
 
+  async exportToCsv(query: ProfileQueryDto) {
+    const where = buildWhereClause(query);
+    const orderBy = buildOrderBy(query);
+
+    const profiles = await this.prisma.profile.findMany({
+      where,
+      orderBy,
+    });
+
+    const header = [
+      'id',
+      'name',
+      'gender',
+      'gender_probability',
+      'age',
+      'age_group',
+      'country_id',
+      'country_name',
+      'country_probability',
+      'created_at',
+    ];
+
+    const rows = profiles.map((p) => {
+      const formatted = this.formatProfile(p);
+      return [
+        formatted.id,
+        `"${formatted.name.replace(/"/g, '""')}"`,
+        formatted.gender,
+        formatted.gender_probability,
+        formatted.age,
+        formatted.age_group,
+        formatted.country_id,
+        `"${formatted.country_name.replace(/"/g, '""')}"`,
+        formatted.country_probability,
+        formatted.created_at,
+      ].join(',');
+    });
+
+    return [header.join(','), ...rows].join('\n');
+  }
+
   private formatProfile(profile: Profile) {
     return {
       id: profile.id,

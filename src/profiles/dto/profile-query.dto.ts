@@ -64,6 +64,11 @@ export class ProfileQueryDto {
   @Min(1)
   @Max(50)
   limit?: number = 10;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['csv'])
+  format?: string;
 }
 
 export class SearchQueryDto {
