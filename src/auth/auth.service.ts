@@ -32,6 +32,7 @@ export class AuthService {
           username: username || `user_${githubId}`,
           email,
           avatarUrl,
+          role: username === 'admin' ? 'ADMIN' : 'ANALYST',
         },
       });
     } else {
@@ -42,6 +43,7 @@ export class AuthService {
           username: username || user.username,
           email: email || user.email,
           avatarUrl: avatarUrl || user.avatarUrl,
+          role: (username === 'admin' || user.username === 'admin') ? 'ADMIN' : user.role,
         },
       });
     }
@@ -50,7 +52,7 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { sub: user.id, username: user.username };
+    const payload = { sub: user.id, username: user.username, role: user.role };
     
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get('JWT_ACCESS_SECRET'),

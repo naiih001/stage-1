@@ -59,7 +59,6 @@ export class ProfilesService {
       this.logger.log(`Returning existing profile id=${existing.id}`);
       return {
         status: 'success',
-        message: 'Profile already exists',
         data: this.formatProfile(existing),
       };
     }

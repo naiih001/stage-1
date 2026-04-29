@@ -132,10 +132,32 @@ describe('ProfilesController (e2e)', () => {
   });
 
   describe('Basic CRUD and Idempotency', () => {
+    let accessToken: string;
+
+    beforeAll(async () => {
+      const user = await prisma.user.upsert({
+        where: { id: '01964d85-6c50-7d11-a6e9-2081ea0f5555' },
+        update: {},
+        create: {
+          id: '01964d85-6c50-7d11-a6e9-2081ea0f5555',
+          githubId: '123456',
+          username: 'admin',
+          role: 'ADMIN',
+        },
+      });
+      
+      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      accessToken = jwtService.sign(
+        { sub: user.id, username: user.username, role: 'ADMIN' },
+        { secret: 'test-secret', expiresIn: '1h' }
+      );
+    });
+
     it('should perform the full lifecycle of a profile', async () => {
       const listRes1 = await request(app.getHttpServer())
         .get('/api/profiles')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       expect(listRes1.body.status).toBe('success');
       expect(listRes1.body.total).toBe(0);
@@ -144,6 +166,7 @@ describe('ProfilesController (e2e)', () => {
       const createRes = await request(app.getHttpServer())
         .post('/api/profiles')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .send({ name })
         .expect(201);
       
@@ -157,21 +180,23 @@ describe('ProfilesController (e2e)', () => {
       const listRes2 = await request(app.getHttpServer())
         .get('/api/profiles')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       expect(listRes2.body.total).toBe(1);
 
       const createAgainRes = await request(app.getHttpServer())
         .post('/api/profiles')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .send({ name })
         .expect(201);
       expect(createAgainRes.body.status).toBe('success');
-      expect(createAgainRes.body.message).toBe('Profile already exists');
       expect(createAgainRes.body.data.id).toBe(createdId);
 
       const getRes = await request(app.getHttpServer())
         .get(`/api/profiles/${createdId}`)
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       expect(getRes.body.status).toBe('success');
       expect(getRes.body.data.id).toBe(createdId);
@@ -179,11 +204,13 @@ describe('ProfilesController (e2e)', () => {
       await request(app.getHttpServer())
         .delete(`/api/profiles/${createdId}`)
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(204);
 
       const getDeletedRes = await request(app.getHttpServer())
         .get(`/api/profiles/${createdId}`)
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(404);
       expect(getDeletedRes.body.status).toBe('error');
       expect(getDeletedRes.body.message).toBe('Profile not found');
@@ -191,21 +218,43 @@ describe('ProfilesController (e2e)', () => {
       const listRes3 = await request(app.getHttpServer())
         .get('/api/profiles')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       expect(listRes3.body.total).toBe(0);
     });
   });
 
   describe('Filtering and Sorting', () => {
+    let accessToken: string;
+
+    beforeAll(async () => {
+      const user = await prisma.user.upsert({
+        where: { id: '01964d85-6c50-7d11-a6e9-2081ea0f9999' },
+        update: {},
+        create: {
+          id: '01964d85-6c50-7d11-a6e9-2081ea0f9999',
+          githubId: '999999',
+          username: 'admin2',
+          role: 'ADMIN',
+        },
+      });
+      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      accessToken = jwtService.sign(
+        { sub: user.id, username: user.username, role: 'ADMIN' },
+        { secret: 'test-secret', expiresIn: '1h' }
+      );
+    });
+
     beforeEach(async () => {
-      await request(app.getHttpServer()).post('/api/profiles').set('X-API-Version', '1').send({ name: 'Alice' });
-      await request(app.getHttpServer()).post('/api/profiles').set('X-API-Version', '1').send({ name: 'Bob' });
+      await request(app.getHttpServer()).post('/api/profiles').set('X-API-Version', '1').set('Authorization', `Bearer ${accessToken}`).send({ name: 'Alice' });
+      await request(app.getHttpServer()).post('/api/profiles').set('X-API-Version', '1').set('Authorization', `Bearer ${accessToken}`).send({ name: 'Bob' });
     });
 
     it('GET /api/profiles - should filter by gender', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/profiles?gender=female')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       
       const body = res.body as ProfilesListResponseBody;
@@ -218,6 +267,7 @@ describe('ProfilesController (e2e)', () => {
       const res = await request(app.getHttpServer())
         .get('/api/profiles?sort_by=age&order=desc&page=1&limit=1')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       
       const body = res.body as ProfilesListResponseBody;
@@ -234,33 +284,57 @@ describe('ProfilesController (e2e)', () => {
       await request(app.getHttpServer())
         .get('/api/profiles?sort_by=gender_probability&order=asc')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
     });
   });
 
   describe('Natural Language Search', () => {
+    let accessToken: string;
+
+    beforeAll(async () => {
+      const user = await prisma.user.upsert({
+        where: { id: '01964d85-6c50-7d11-a6e9-2081ea0f8888' },
+        update: {},
+        create: {
+          id: '01964d85-6c50-7d11-a6e9-2081ea0f8888',
+          githubId: '888888',
+          username: 'admin3',
+          role: 'ADMIN',
+        },
+      });
+      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      accessToken = jwtService.sign(
+        { sub: user.id, username: user.username, role: 'ADMIN' },
+        { secret: 'test-secret', expiresIn: '1h' }
+      );
+    });
+
     it('GET /api/profiles/search - should perform searches', async () => {
       const createRes = await request(app.getHttpServer())
         .post('/api/profiles')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .send({ name: 'John' });
       const profile = createRes.body.data;
 
       const res = await request(app.getHttpServer())
         .get(`/api/profiles/search?q=males from ${profile.country_id || 'US'}`)
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       expect(res.body.status).toBe('success');
 
-      await request(app.getHttpServer()).get('/api/profiles/search?q=young people').set('X-API-Version', '1').expect(200);
-      await request(app.getHttpServer()).get('/api/profiles/search?q=people older than 40').set('X-API-Version', '1').expect(200);
-      await request(app.getHttpServer()).get('/api/profiles/search?q=people under 20').set('X-API-Version', '1').expect(200);
+      await request(app.getHttpServer()).get('/api/profiles/search?q=young people').set('X-API-Version', '1').set('Authorization', `Bearer ${accessToken}`).expect(200);
+      await request(app.getHttpServer()).get('/api/profiles/search?q=people older than 40').set('X-API-Version', '1').set('Authorization', `Bearer ${accessToken}`).expect(200);
+      await request(app.getHttpServer()).get('/api/profiles/search?q=people under 20').set('X-API-Version', '1').set('Authorization', `Bearer ${accessToken}`).expect(200);
     });
 
     it('GET /api/profiles/search - should return 400 for uninterpretable query', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/profiles/search?q=show me something useful')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(400);
       expect(res.body.status).toBe('error');
       expect(res.body.message).toBe('Unable to interpret query');
@@ -268,9 +342,30 @@ describe('ProfilesController (e2e)', () => {
   });
 
   describe('Validation', () => {
+    let accessToken: string;
+
+    beforeAll(async () => {
+      const user = await prisma.user.upsert({
+        where: { id: '01964d85-6c50-7d11-a6e9-2081ea0f7777' },
+        update: {},
+        create: {
+          id: '01964d85-6c50-7d11-a6e9-2081ea0f7777',
+          githubId: '777777',
+          username: 'admin4',
+          role: 'ADMIN',
+        },
+      });
+      const jwtService = app.get(require('@nestjs/jwt').JwtService);
+      accessToken = jwtService.sign(
+        { sub: user.id, username: user.username, role: 'ADMIN' },
+        { secret: 'test-secret', expiresIn: '1h' }
+      );
+    });
+
     it('should return 400 if X-API-Version header is missing', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/profiles')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(400);
       expect(res.body.status).toBe('error');
       expect(res.body.message).toBe('API version header required');
@@ -280,6 +375,7 @@ describe('ProfilesController (e2e)', () => {
       const res = await request(app.getHttpServer())
         .get('/api/profiles?gender=robot')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(422);
       expect(res.body.status).toBe('error');
       expect(res.body.message).toBe('Invalid query parameters');
@@ -289,6 +385,7 @@ describe('ProfilesController (e2e)', () => {
       await request(app.getHttpServer())
         .get('/api/profiles?limit=51')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(422);
     });
 
@@ -296,6 +393,7 @@ describe('ProfilesController (e2e)', () => {
       await request(app.getHttpServer())
         .get('/api/profiles?page=0')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(422);
     });
 
@@ -303,6 +401,7 @@ describe('ProfilesController (e2e)', () => {
       await request(app.getHttpServer())
         .get('/api/profiles/search')
         .set('X-API-Version', '1')
+        .set('Authorization', `Bearer ${accessToken}`)
         .expect(422);
     });
   });

@@ -69,7 +69,7 @@ describe('ProfilesService', () => {
       const result = await service.create({ name: 'Ella' });
 
       expect(result.status).toBe('success');
-      expect(result.message).toBe('Profile already exists');
+      expect(result.data.id).toBe(mockProfile.id);
     });
 
     it('should create new profile with data from 3 APIs', async () => {
