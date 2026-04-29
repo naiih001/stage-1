@@ -5,9 +5,42 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { uuidv7 } from 'uuidv7';
 import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { GithubCliLoginDto } from './dto/github-cli-login.dto';
+
+interface GithubUserProfile {
+  id: string | number;
+  username?: string;
+  emails?: Array<{ value?: string }>;
+  _json?: {
+    avatar_url?: string;
+    login?: string;
+    email?: string;
+  };
+}
+
+interface GithubTokenResponse {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+}
+
+interface GithubApiUser {
+  id: number;
+  login: string;
+  email?: string | null;
+  avatar_url?: string;
+}
+
+interface GithubApiEmail {
+  email: string;
+  primary: boolean;
+  verified: boolean;
+}
 
 @Injectable()
 export class AuthService {
@@ -17,12 +50,18 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private httpService: HttpService,
   ) {}
 
-  async validateGithubUser(profile: any) {
+  async validateGithubUser(profile: GithubUserProfile) {
+    return this.upsertGithubUser(profile);
+  }
+
+  private async upsertGithubUser(profile: GithubUserProfile) {
     const { id: githubId, username, emails, _json } = profile;
     const email = emails?.[0]?.value;
     const avatarUrl = _json?.avatar_url;
+    const githubUsername = username || _json?.login;
 
     let user = await this.prisma.user.findUnique({
       where: { githubId: String(githubId) },
@@ -39,10 +78,10 @@ export class AuthService {
         data: {
           id: uuidv7(),
           githubId: String(githubId),
-          username: username || `user_${githubId}`,
+          username: githubUsername || `user_${githubId}`,
           email,
           avatarUrl,
-          role: username === 'admin' ? 'ADMIN' : 'ANALYST',
+          role: githubUsername === 'admin' ? 'ADMIN' : 'ANALYST',
           lastLoginAt: new Date(),
         },
       });
@@ -51,11 +90,11 @@ export class AuthService {
       user = await this.prisma.user.update({
         where: { id: user.id },
         data: {
-          username: username || user.username,
+          username: githubUsername || user.username,
           email: email || user.email,
           avatarUrl: avatarUrl || user.avatarUrl,
           role:
-            username === 'admin' || user.username === 'admin'
+            githubUsername === 'admin' || user.username === 'admin'
               ? 'ADMIN'
               : user.role,
           lastLoginAt: new Date(),
@@ -64,6 +103,115 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async loginWithGithubCode(githubCliLoginDto: GithubCliLoginDto) {
+    let profile: GithubUserProfile;
+
+    try {
+      const githubAccessToken = await this.exchangeGithubCodeForToken(
+        githubCliLoginDto,
+      );
+      profile = await this.getGithubProfile(githubAccessToken);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      this.logger.warn(`GitHub CLI login failed: ${(error as Error).message}`);
+      throw new UnauthorizedException('GitHub authorization failed');
+    }
+
+    const user = await this.upsertGithubUser(profile);
+    const tokens = await this.login(user);
+
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+    };
+  }
+
+  private async exchangeGithubCodeForToken({
+    code,
+    code_verifier,
+    redirect_uri,
+  }: GithubCliLoginDto): Promise<string> {
+    const tokenPayload: Record<string, string | undefined> = {
+      client_id: this.configService.get<string>('GITHUB_CLIENT_ID'),
+      client_secret: this.configService.get<string>('GITHUB_CLIENT_SECRET'),
+      code,
+      code_verifier,
+    };
+    const callbackUrl =
+      redirect_uri || this.configService.get<string>('GITHUB_CLI_CALLBACK_URL');
+
+    if (callbackUrl) {
+      tokenPayload.redirect_uri = callbackUrl;
+    }
+
+    const response = await firstValueFrom(
+      this.httpService.post<GithubTokenResponse>(
+        'https://github.com/login/oauth/access_token',
+        tokenPayload,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
+        },
+      ),
+    );
+
+    if (response.data.error || !response.data.access_token) {
+      throw new UnauthorizedException(
+        response.data.error_description || 'GitHub authorization failed',
+      );
+    }
+
+    return response.data.access_token;
+  }
+
+  private async getGithubProfile(
+    githubAccessToken: string,
+  ): Promise<GithubUserProfile> {
+    const headers = {
+      Authorization: `Bearer ${githubAccessToken}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+
+    const [userResponse, emailsResponse] = await Promise.all([
+      firstValueFrom(
+        this.httpService.get<GithubApiUser>('https://api.github.com/user', {
+          headers,
+        }),
+      ),
+      firstValueFrom(
+        this.httpService.get<GithubApiEmail[]>(
+          'https://api.github.com/user/emails',
+          { headers },
+        ),
+      ),
+    ]);
+
+    const primaryEmail = emailsResponse.data.find(
+      (email) => email.primary && email.verified,
+    );
+    const email = primaryEmail?.email || userResponse.data.email || undefined;
+
+    return {
+      id: userResponse.data.id,
+      username: userResponse.data.login,
+      emails: email ? [{ value: email }] : undefined,
+      _json: {
+        login: userResponse.data.login,
+        email,
+        avatar_url: userResponse.data.avatar_url,
+      },
+    };
   }
 
   async login(user: any) {

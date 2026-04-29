@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { GithubAuthGuard } from './guards/github-auth.guard';
+import { GithubCliLoginDto } from './dto/github-cli-login.dto';
 import type { Request } from 'express';
 
 @Controller('/auth')
@@ -26,6 +27,11 @@ export class AuthController {
   @UseGuards(GithubAuthGuard)
   async githubAuthCallback(@Req() req: Request) {
     return this.authService.login(req.user);
+  }
+
+  @Post('github/cli')
+  async githubCliLogin(@Body() githubCliLoginDto: GithubCliLoginDto) {
+    return this.authService.loginWithGithubCode(githubCliLoginDto);
   }
 
   @Post('refresh')
