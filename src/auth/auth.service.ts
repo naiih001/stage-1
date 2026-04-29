@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Logger,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { uuidv7 } from 'uuidv7';
@@ -23,6 +28,11 @@ export class AuthService {
       where: { githubId: String(githubId) },
     });
 
+    if (user && !user.isActive) {
+      this.logger.warn(`Inactive user attempted to login: ${user.username}`);
+      throw new ForbiddenException('User account is deactivated');
+    }
+
     if (!user) {
       this.logger.log(`Creating new user for GitHub ID: ${githubId}`);
       user = await this.prisma.user.create({
@@ -33,6 +43,7 @@ export class AuthService {
           email,
           avatarUrl,
           role: username === 'admin' ? 'ADMIN' : 'ANALYST',
+          lastLoginAt: new Date(),
         },
       });
     } else {
@@ -43,7 +54,11 @@ export class AuthService {
           username: username || user.username,
           email: email || user.email,
           avatarUrl: avatarUrl || user.avatarUrl,
-          role: (username === 'admin' || user.username === 'admin') ? 'ADMIN' : user.role,
+          role:
+            username === 'admin' || user.username === 'admin'
+              ? 'ADMIN'
+              : user.role,
+          lastLoginAt: new Date(),
         },
       });
     }
@@ -52,8 +67,12 @@ export class AuthService {
   }
 
   async login(user: any) {
+    if (!user.isActive) {
+      throw new ForbiddenException('User account is deactivated');
+    }
+
     const payload = { sub: user.id, username: user.username, role: user.role };
-    
+
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get('JWT_ACCESS_SECRET'),
       expiresIn: '3m',
@@ -93,6 +112,10 @@ export class AuthService {
 
     // Revoke old token
     await this.prisma.refreshToken.delete({ where: { id: tokenDoc.id } });
+
+    if (!tokenDoc.user.isActive) {
+      throw new ForbiddenException('User account is deactivated');
+    }
 
     // Issue new tokens
     return this.login(tokenDoc.user);

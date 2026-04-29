@@ -1,0 +1,13 @@
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('ANALYST', 'ADMIN');
+
+-- AlterTable
+ALTER TABLE "profiles" ALTER COLUMN "name" SET DATA TYPE VARCHAR,
+ALTER COLUMN "gender" SET DATA TYPE VARCHAR,
+ALTER COLUMN "age_group" SET DATA TYPE VARCHAR,
+ALTER COLUMN "country_name" SET DATA TYPE VARCHAR;
+
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN     "is_active" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "last_login_at" TIMESTAMP(3),
+ADD COLUMN     "role" "Role" NOT NULL DEFAULT 'ANALYST';
