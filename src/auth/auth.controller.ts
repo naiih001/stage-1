@@ -45,7 +45,7 @@ export class AuthController {
       }
     }
 
-    return res.redirect(`${REDIRECT_MAP.web}?token=${jwt}`);
+    return res.redirect(`${REDIRECT_MAP.web}/api/auth/callback?token=${jwt}`);
   }
 
   @Post('github/cli')
