@@ -38,7 +38,10 @@ export class AuthController {
         );
 
         if (client === 'cli' && port) {
-          return res.redirect(`${REDIRECT_MAP.cli(port)}?token=${jwt}`);
+          return {
+            success: true, 
+            token: jwt
+          }
         }
       } catch (e) {
         // Fallback to web if state parsing fails
