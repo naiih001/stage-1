@@ -11,7 +11,7 @@ import {
 import { AuthService } from './auth.service';
 import { GithubAuthGuard } from './guards/github-auth.guard';
 import { GithubCliLoginDto } from './dto/github-cli-login.dto';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { REDIRECT_MAP } from './constants/redirect-map.const';
 
 @Controller('/auth')

@@ -245,6 +245,14 @@ export class AuthService {
     };
   }
 
+  signToken(user: any) {
+    const payload = { sub: user.id, username: user.username, role: user.role };
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get('JWT_ACCESS_SECRET'),
+      expiresIn: '3m',
+    });
+  }
+
   async refreshTokens(refreshToken: string) {
     const tokenDoc = await this.prisma.refreshToken.findUnique({
       where: { token: refreshToken },
